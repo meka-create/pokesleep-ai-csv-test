@@ -15,10 +15,33 @@ import hashlib
 import io
 import json
 import pathlib
+import os
+import tempfile
+import struct
+import zlib
 import re
 import sys
 
 # Pinned importer header: never take the expected names only from the mutable schema.
+FOOD_BLANK_ALLOWED = {'ミュウ': (3,), 'ダークライ': (2, 3)}
+
+# Observed pokesleep-tool CSV round-trip compatibility guard (2026-10-09).
+# For the two Toxtricity forms, mismatched natures were silently changed by
+# the LIVE importer/exporter. Fail closed; NEVER guess a replacement nature.
+# Only these two exact species names are constrained by this evidence.
+TOXTRICITY_FORM_NATURES = {
+    'ストリンダー (ハイ)': frozenset((
+        'いじっぱり', 'やんちゃ', 'ゆうかん', 'なまいき', 'うっかりや',
+        'わんぱく', 'のうてんき', 'ようき', 'せっかち', 'むじゃき',
+        'がんばりや', 'きまぐれ', 'すなお',
+    )),
+    'ストリンダー (ロー)': frozenset((
+        'さみしがり', 'しんちょう', 'おとなしい', 'おだやか',
+        'ずぶとい', 'のんき', 'おっとり', 'れいせい', 'ひかえめ',
+        'おくびょう', 'てれや', 'まじめ',
+    )),
+}
+
 EXPECTED_HEADER = (
     'ニックネーム', 'ポケモン', 'レベル', 'スキルレベル', '食材1',
     '食材2', '食材3', 'メインスキル', 'せいかく',
@@ -38,6 +61,57 @@ def require(cond, message):
 def load_json(path):
     with open(path, encoding='utf-8') as fh:
         return json.load(fh)
+
+
+# Conservative stdlib-only binary/structure check; hashes alone do not show that
+# purported image bytes are actually PNG/JPEG/WebP. This does NOT prove that an
+# image is a Pokémon Sleep screenshot or guarantee a successful full decode.
+def check_image_format(path):
+    name = path.name.lower()
+    size = path.stat().st_size
+    require(size >= 20, f'画像形式が不正/短すぎます: {path.name}')
+    # Only read the header and trailer; never allocate a second full-size
+    # in-memory copy of user screenshots merely to check their signatures.
+    with path.open('rb') as fh:
+        head = fh.read(64)
+        fh.seek(max(0, size - 16))
+        tail = fh.read()
+    if name.endswith('.png'):
+        valid = (head[:8] == b'\x89PNG\r\n\x1a\n'
+                 and head[12:16] == b'IHDR'
+                 and struct.unpack('>I', head[8:12])[0] == 13
+                 and size >= 45 and tail[-12:-8] == b'\x00\x00\x00\x00'
+                 and tail[-8:-4] == b'IEND'
+                 and zlib.crc32(head[12:29]) & 0xffffffff == struct.unpack('>I', head[29:33])[0])
+    elif name.endswith(('.jpg', '.jpeg')):
+        valid = head.startswith(b'\xff\xd8\xff') and tail.endswith(b'\xff\xd9')
+    elif name.endswith('.webp'):
+        valid = (head[:4] == b'RIFF' and head[8:12] == b'WEBP'
+                 and head[12:16] in (b'VP8 ', b'VP8L', b'VP8X')
+                 and struct.unpack('<I', head[4:8])[0] + 8 == size)
+    else:
+        valid = False
+    require(valid, f'拡張子と画像バイナリ形式が一致しない/破損の疑い: {path.name}')
+
+
+def food_candidates_for_slot(poke, slot, ingredient_set):
+    """All species: allowed ingredient iff its CURRENT SLOT quantity is >0.
+
+    ing1 can be present in slots 1/2/3; ing2 in slots 2/3; ing3 in slot 3.
+    Mythical per-slot alternatives are subject to the SAME c1/c2/c3 test.
+    """
+    require(slot in (1, 2, 3), '食材位置が不正です')
+    allowed = set()
+    for position in range(1, slot + 1):
+        entry = poke.get(f'ing{position}') or {}
+        qty = entry.get(f'c{slot}')
+        if entry.get('name') in ingredient_set and type(qty) is int and qty > 0:
+            allowed.add(entry['name'])
+    for entry in poke.get('mythIng', []):
+        qty = entry.get(f'c{slot}')
+        if entry.get('name') in ingredient_set and type(qty) is int and qty > 0:
+            allowed.add(entry['name'])
+    return allowed
 
 
 def safe_image_path(directory, raw):
@@ -83,6 +157,7 @@ def image_integrity(directory, manifest):
                 h.update(chunk)
         require(h.hexdigest() == item.get('sha256'), f'画像ハッシュが一致しません: {image_id}')
         require(path.stat().st_size == item.get('size'), f'画像サイズが一致しません: {image_id}')
+        check_image_format(path)
     extras = {p.relative_to(directory).as_posix() for p in (directory / 'images').rglob('*') if p.is_file()} - seen_paths
     require(not extras, f'マニフェストに存在しない画像があります: {sorted(extras)[:3]}')
     return images
@@ -100,6 +175,10 @@ def validate_included(row, pokemon_by_name, ingredient_set, natures, subskills, 
     require(row.get('reviewComplete') is True, f'{image_id}: ユーザー確認完了フラグがありません')
     nickname, species = d.get('nickname'), d.get('species')
     require(isinstance(nickname, str) and nickname.strip(), f'{image_id}: ニックネーム未確定')
+    require('\r' not in nickname and '\n' not in nickname,
+            f'{image_id}: ニックネーム内の改行は実インポートで破損を確認。ユーザーに改行なしの名前を確認してください')
+    require(not any(ord(c) < 32 or ord(c) == 127 for c in nickname),
+            f'{image_id}: ニックネームに制御文字があります。勝手に置換せず確認してください')
     require(isinstance(species, str) and species in pokemon_by_name, f'{image_id}: 種族が未対応/不明: {species}')
     poke = pokemon_by_name[species]
     level, skill_level = d.get('level'), d.get('skillLevel')
@@ -107,33 +186,32 @@ def validate_included(row, pokemon_by_name, ingredient_set, natures, subskills, 
     require(is_int(skill_level, 1, 10), f'{image_id}: スキルレベル未確定/範囲外')
     nature = d.get('nature')
     require(nature in natures, f'{image_id}: せいかく不明/未対応: {nature}')
+    if species in TOXTRICITY_FORM_NATURES:
+        require(nature in TOXTRICITY_FORM_NATURES[species],
+                f'{image_id}: {species} とせいかく「{nature}」は実インポート往復で値が変化する恐れがあります。'
+                '自動修正せず画像を再確認し、必要に応じてユーザーに確認してください')
     foods = d.get('foods')
     require(isinstance(foods, list) and len(foods) == 3, f'{image_id}: 食材3枠がそろっていません')
-    possible = []
-    for i in range(3):
-        keys = ['ing1'] if i == 0 else (['ing1','ing2'] if i == 1 else ['ing1','ing2','ing3'])
-        allowed = set()
-        for key in keys:
-            source = poke.get(key) or {}
-            if source.get('name') and source['name'] in ingredient_set:
-                allowed.add(source['name'])
-        if poke.get('mythIng'):
-            allowed |= {x['name'] for x in poke['mythIng'] if x.get('name') in ingredient_set}
-        possible.append(allowed)
+    # Applies to EVERY species, including mythical ones. A name appearing
+    # somewhere in a species list does not make it legal at every food slot.
+    possible = [food_candidates_for_slot(poke, slot, ingredient_set) for slot in (1, 2, 3)]
     empty_confirmed = d.get('emptyFoodsConfirmed', [])
     require(isinstance(empty_confirmed, list) and all(is_int(x, 2, 3) for x in empty_confirmed)
             and len(set(empty_confirmed)) == len(empty_confirmed),
             f'{image_id}: emptyFoodsConfirmedは食材2・3の重複のない位置配列のみ許可')
+    # Cross-check the pinned schema rule with a code-side invariant to prevent a
+    # mutable, self-reported compatibility label from silently authorizing blanks.
+    require(schema.get('foodBlankAllowedBySpecies') == {'ミュウ': [3], 'ダークライ': [2, 3]},
+            f'{image_id}: 食材空欄の正式種族別ルールが未検証です')
+    allowed_blanks = FOOD_BLANK_ALLOWED.get(species, ())
     expected_food_blanks = [i + 1 for i, value in enumerate(foods) if value == '']
     require(empty_confirmed == expected_food_blanks,
             f'{image_id}: 空欄食材と確認済み位置の記録が一致しません')
-    require(not expected_food_blanks or poke.get('mythIng'),
-            f'{image_id}: この種族では食材の空欄を許可しません')
     for i, value in enumerate(foods):
         require(isinstance(value, str), f'{image_id}: 食材{i+1}の型が不正')
         if value == '':
-            require(i > 0 and i + 1 in empty_confirmed and poke.get('mythIng'),
-                    f'{image_id}: 食材{i+1}の空欄は食材2・3の確認済み未設定枠のみ許可')
+            require(i+1 in allowed_blanks and i+1 in empty_confirmed,
+                    f'{image_id}: {species}の食材{i+1}はゲーム仕様上空欄を許可しません')
         else:
             require(value in ingredient_set and value in possible[i],
                     f'{image_id}: 食材{i+1}が種族/候補と不整合: {value}')
@@ -165,36 +243,54 @@ def validate_included(row, pokemon_by_name, ingredient_set, natures, subskills, 
     non_empty_skills = [x for x in skills if x]
     require(len(set(non_empty_skills)) == len(non_empty_skills),
             f'{image_id}: サブスキルの重複（誤認識の疑い）')
-    # A value supplied by the AI is not automatically an observed value.
-    # Require an explicit provenance category for the two commonly unshown fields.
-    evidence = d.get('fieldEvidence')
-    require(isinstance(evidence, dict),
-            f'{image_id}: 一緒に眠った時間・色違いの取得根拠(fieldEvidence)がありません')
-    for field in ('sleepTogetherHours', 'shiny'):
-        require(evidence.get(field) in ('image-visible', 'user-confirmed', 'verified-safe-default'),
-                f'{image_id}: {field}の取得根拠が未確定です')
-    # Never assume 0 when importer-default semantics are not certified.
+    # "User policy" is distinct from a *verified semantic default*. The 0/0
+    # values have one observed importer round-trip, but neither represents an
+    # observation of the actual Pokemon. Never label these image-visible.
+    policy = schema.get('optionalFieldPolicy')
+    require(policy == {
+        'noQuestions': ['sleepTogetherHours', 'shiny'],
+        'whenUnobserved': {'sleepTogetherHours': 0, 'shiny': 0},
+        'provenance': 'user-policy-default'
+    }, f'{image_id}: 未確認項目の既定値ポリシーが想定と異なります')
+    evidence = d.get('fieldEvidence', {})
+    require(isinstance(evidence, dict), f'{image_id}: fieldEvidenceが不正です')
     verified_defaults = schema.get('verifiedSafeDefaults', {})
-    if 'sleepTogetherHours' in d:
-        sleep = d['sleepTogetherHours']
-    else:
-        require(verified_defaults.get('sleepTogetherHours') == 0,
-                f'{image_id}: 一緒に眠った時間の安全な既定値は未検証です。ユーザーに確認してください')
-        sleep = 0
-    if evidence['sleepTogetherHours'] == 'verified-safe-default':
-        require('sleepTogetherHours' in verified_defaults and sleep == verified_defaults['sleepTogetherHours'],
-                f'{image_id}: 一緒に眠った時間に検証済みでない既定値を使用しています')
-    require(is_int(sleep, 0, 2000) and sleep in (0, 200, 500, 1000, 2000),
-            f'{image_id}: 一緒に眠った時間のCSV閾値が未対応/不正: {sleep!r}')
-    shiny = d.get('shiny')
-    if evidence['shiny'] == 'verified-safe-default':
-        require('shiny' in verified_defaults and shiny == verified_defaults['shiny'],
-                f'{image_id}: 色違いに検証済みでない既定値を使用しています')
-    require(is_int(shiny, 0, 1), f'{image_id}: 色違いの判定がありません。確認してください')
+    optional = {}
+    for field, values, description in (
+        ('sleepTogetherHours', (0, 200, 500, 1000, 2000), '一緒に眠った時間'),
+        ('shiny', (0, 1), '色違い'),
+    ):
+        fallback = policy['whenUnobserved'][field]
+        has_explicit_value = field in d
+        value = d[field] if has_explicit_value else fallback
+        provenance = evidence.get(field, 'user-policy-default' if value == fallback else None)
+        require(type(value) is int and value in values,
+                f'{image_id}: {description}の値が未対応/不正: {value!r}')
+        require(provenance in ('user-policy-default', 'image-visible',
+                               'user-confirmed', 'verified-safe-default'),
+                f'{image_id}: {description}の取得根拠が不正です')
+        if provenance == 'user-policy-default':
+            require(value == fallback,
+                    f'{image_id}: {description}のユーザー方針による既定値は{fallback}のみ')
+        elif provenance == 'verified-safe-default':
+            require(field in verified_defaults and value == verified_defaults[field],
+                    f'{image_id}: {description}に検証済みでない既定値を使用しています')
+        else:
+            require(has_explicit_value,
+                    f'{image_id}: {description}を実際に観察/確認していません')
+        optional[field] = value
+    sleep, shiny = optional['sleepTogetherHours'], optional['shiny']
     return [nickname, species, level, skill_level, *foods, csv_skill, nature, *skills, sleep, shiny]
 
 
 def build(records, manifest, master, schema, version, directory, prototype_test=False):
+    for name, value in [('records', records), ('manifest', manifest), ('master', master),
+                        ('schema', schema), ('version', version)]:
+        require(isinstance(value, dict), f'{name}のJSONルートはオブジェクトである必要があります')
+    require(isinstance(master.get('pokemon'), list)
+            and isinstance(master.get('ingredients'), dict)
+            and isinstance(master.get('natures'), list)
+            and isinstance(master.get('subskills'), list), 'マスターの構造が不正です')
     require(prototype_test or (version.get('productionCsvAllowed') is True
                                and version.get('compatibilityVerified') is True
                                and version.get('masterVerifiedAgainstLive') is True
@@ -290,8 +386,6 @@ def main():
     args = cli.parse_args()
     directory = pathlib.Path(args.package_dir).resolve()
     output_path = directory / 'pokesleep_import.csv'
-    if output_path.is_file():
-        output_path.unlink()
     try:
         data, report = build(
             load_json(pathlib.Path(args.records)),
@@ -302,14 +396,27 @@ def main():
             directory,
             prototype_test=args.prototype_test,
         )
-        path = directory / 'pokesleep_import.csv'
-        path.write_bytes(data)
+        # Replace only after COMPLETE validation. On validation failure an old
+        # CSV is preserved, but it must NEVER be represented as newly generated.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='wb', prefix='.pokesleep_csv_', suffix='.tmp',
+                                             dir=directory, delete=False) as fh:
+                temporary = pathlib.Path(fh.name)
+                fh.write(data)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(temporary, output_path)
+            temporary = None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
         print(f"CSV生成: {report['included']}行、除外{report['excluded']}行、入力画像{report['images']}枚")
         if args.prototype_test:
             print('注意: プロトタイプ試験出力です。実際のpokesleep-tool互換性は未保証。')
         return 0
     except (ValidationError, ValueError, KeyError, TypeError, OSError, json.JSONDecodeError) as e:
-        print(f'CSV作成を停止: {e}', file=sys.stderr)
+        print(f'CSV作成を停止: {e}。既存のpokesleep_import.csvは今回生成されたものではありません', file=sys.stderr)
         return 2
 
 if __name__ == '__main__':

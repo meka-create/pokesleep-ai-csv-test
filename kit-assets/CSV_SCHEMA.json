@@ -2,10 +2,19 @@
   "compatibilitySource": "Candidate124-derived 16-col snapshot; upstream source staging added, importer/deployed-site compatibility NOT yet verified",
   "csvFilename": "pokesleep_import.csv",
   "defaultPolicy": {
-    "shiny": "NEVER silently default when shiny status is unknown; confirm with user before output",
-    "sleepTogetherHours": "0 is ONLY permitted after importer semantics are independently verified; otherwise the user must confirm. The prototype must NOT assert verified defaults."
+    "sleepTogetherHours": "画像に表示されず不明なら質問しないで0を使用（実睡眠時間の推定・事実ではない）",
+    "shiny": "画像に表示されず不明なら質問しないで0を使用（色違いではないと確認した意味ではない）"
   },
   "encoding": "UTF-8 without BOM",
+  "foodBlankAllowedBySpecies": {
+    "ダークライ": [
+      2,
+      3
+    ],
+    "ミュウ": [
+      3
+    ]
+  },
   "header": [
     "ニックネーム",
     "ポケモン",
@@ -40,5 +49,16 @@
     "Tasty Chance S": "料理チャンスS"
   },
   "schemaVersion": "ai-csv-schema-v0.1",
-  "verifiedSafeDefaults": {}
+  "verifiedSafeDefaults": {},
+  "optionalFieldPolicy": {
+    "noQuestions": [
+      "sleepTogetherHours",
+      "shiny"
+    ],
+    "whenUnobserved": {
+      "sleepTogetherHours": 0,
+      "shiny": 0
+    },
+    "provenance": "user-policy-default"
+  }
 }

@@ -1,0 +1,21 @@
+{
+  "purpose": "READ_ONLY_AUDIT_NOT_GOLD",
+  "sourceDescription": "通常の画像解析で既に読めた数値だけ。追加読取の強制なし",
+  "imageObservations": [
+    {
+      "imageId": "IMG-0001",
+      "quantities": [
+        null,
+        null,
+        null
+      ],
+      "sp": null,
+      "helpSeconds": null,
+      "carry": null,
+      "whiteMintMarkObserved": null,
+      "sleepTogetherHoursObserved": null,
+      "shinyObserved": null,
+      "speciesVisualConfirmed": null
+    }
+  ]
+}

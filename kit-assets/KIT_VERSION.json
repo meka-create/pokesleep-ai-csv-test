@@ -1,15 +1,15 @@
 {
   "asOf": "2026-10-09",
   "assetSha256": {
-    "CSV_SCHEMA.json": "4e30f3f801c66449e9d2dcc6ed080384ccedde1643f3a03a85a9db6575b4c666",
-    "MASTER_DATA.json": "13b7d07f31ca75dbc434e9426d37d2ef0ca2fd26f14105d28dcd2117c202a3db"
+    "MASTER_DATA.json": "13b7d07f31ca75dbc434e9426d37d2ef0ca2fd26f14105d28dcd2117c202a3db",
+    "CSV_SCHEMA.json": "c0f30f5400ef34823c211a95a8a13218f100e10d7a627e0d4536a66332cb5dfe"
   },
   "compatibilityVerified": false,
-  "kitVersion": "0.5.0-prototype",
+  "kitVersion": "0.12.0-prototype",
   "licenseNote": "Do not claim affiliation with Pokémon Sleep or pokesleep-tool.",
   "masterVerifiedAgainstLive": false,
   "productionCsvAllowed": false,
   "sourceCommit": null,
-  "status": "PROTOTYPE ONLY - fail-closed CSV integrity/blank/approval guard fixes; real importer E2E NOT verified",
+  "status": "PROTOTYPE ONLY / HOLD - Toxtricity form+nature mismatch rejected; 249-species fixture roundtrip value PASS, not full importer compatibility",
   "upstream": "https://github.com/nitoyon/pokesleep-tool"
 }

@@ -2,8 +2,11 @@ import { makeZip } from './zip-store.js';
 
 const KIT_FILES = [
   'START_HERE.md', 'AI_INSTRUCTIONS.md', 'READING_RULES.md',
+  'PROGRESS_PROTOCOL.md',
   'MASTER_DATA.json', 'CSV_SCHEMA.json', 'KIT_VERSION.json',
-  'VALIDATOR.py', 'RECORDS_TEMPLATE.json'
+  'VALIDATOR.py', 'PROTOTYPE_EXPORT_GATE.py', 'RELEASE_EXPORT_GATE.py', 'RECORDS_TEMPLATE.json',
+  'SPECIES_AUDIT_GUIDE.md', 'SPECIES_AUDIT.py', 'species_evidence_lab.py',
+  'numeric_observer.py', 'SPECIES_OBSERVATIONS_TEMPLATE.json'
 ];
 const FILES = new Map();
 let seq = 0, lastZip = null, lastName = '', busy = false, hashing = 0, hashError = false;
@@ -16,9 +19,35 @@ function fmt(bytes) { return (bytes / 1024 / 1024).toFixed(1) + ' MB'; }
 function announce(msg, error=false) { status.textContent=msg; status.classList.toggle('error',error); }
 function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.textContent=b?'ZIP作成中…':'AI提出用ZIPを作成 ↓'; }
 function escapeHtml(x) { return x.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function imageMagicMatches(data, filename) {
+  const head = new Uint8Array(data, 0, Math.min(data.byteLength, 64));
+  const bytesAt = (offset, values) => values.every((value, i) => head[offset + i] === value);
+  const suffix = filename.toLowerCase().split('.').pop();
+  if (suffix === 'png') {
+    if (data.byteLength < 45) return false;
+    const tail = new Uint8Array(data, data.byteLength - 12, 12);
+    return bytesAt(0, [137,80,78,71,13,10,26,10]) && bytesAt(12, [73,72,68,82])
+      && new DataView(data).getUint32(8, false) === 13
+      && Array.from(tail.slice(0, 8)).join(',') === '0,0,0,0,73,69,78,68';
+  }
+  if (suffix === 'jpg' || suffix === 'jpeg') {
+    if (data.byteLength < 20) return false;
+    const tail = new Uint8Array(data, data.byteLength - 2, 2);
+    return bytesAt(0, [255,216,255]) && tail[0] === 255 && tail[1] === 217;
+  }
+  if (suffix === 'webp') {
+    if (data.byteLength < 20) return false;
+    return bytesAt(0, [82,73,70,70]) && bytesAt(8, [87,69,66,80])
+      && (['VP8 ', 'VP8L', 'VP8X'].some(v => [...v].every((ch, i) => head[12 + i] === ch.charCodeAt(0))))
+      && new DataView(data).getUint32(4, true) + 8 === data.byteLength;
+  }
+  return false;
+}
 async function digestFile(file) {
   const bytes = await file.arrayBuffer();
-  const hash = await crypto.subtle.digest('SHA-256',bytes);
+  if (!imageMagicMatches(bytes, file.name))
+    throw new Error(`画像の拡張子と実体が不一致/破損の疑い: ${file.name}`);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(hash)].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
 function totals() { return [...FILES.values()].reduce((s,r)=>s+r.file.size,0); }
@@ -62,8 +91,17 @@ async function add(files) {
   hashing++;render();fileInput.value='';
   try {
     if (!crypto?.subtle) throw new Error('SHA-256の計算にはHTTPSまたはlocalhostが必要です。');
-    for(const row of added) { row.hash=await digestFile(row.file); }
+    let rejectedBinary = 0;
+    for(const row of added) {
+      try { row.hash = await digestFile(row.file); }
+      catch (error) {
+        rejectedBinary++;
+        URL.revokeObjectURL(row.url);
+        FILES.delete(row.id);
+      }
+    }
     hashError=false;
+    if (rejectedBinary) announce(`${rejectedBinary}件は画像の実体形式が不正なため除外しました。`, true);
   } catch(error) {hashError=true;announce(error.message||String(error),true);}
   finally {hashing--;render();}
 }

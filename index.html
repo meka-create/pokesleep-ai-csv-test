@@ -40,7 +40,8 @@
         </div>
       </section>
       <section class="panel build-panel" aria-labelledby="build-title">
-        <div class="section-heading"><span class="stepnum">02</span><div><h2 id="build-title">AI提出用ZIPを作成</h2><p>共通指示・暫定マスター・検証プログラムを同梱します。正式版では検証済みの最新版を使用します。</p></div></div>
+        <div class="section-heading"><span class="stepnum">02</span><div><h2 id="build-title">AI提出用ZIPを作成</h2><p>共通指示・暫定マスター・検証プログラム・種族候補の独立監査器を同梱します。正式版では検証済みの最新版を使用します。</p></div></div>
+        <p class="privacy">CSVの「一緒に眠った時間」「色違い」は確認を求めません。不明な場合はそれぞれ0を設定します（実際の値を保証するものではありません）。</p>
         <div class="pack-details"><span>元画像は無加工</span><span>件数とSHA-256を記録</span><span>ZIPは1つ</span></div>
         <button id="build" class="primary" type="button" disabled>AI提出用ZIPを作成 <span>↓</span></button>
         <p class="message" id="message" role="status" aria-live="polite"></p>
@@ -52,7 +53,7 @@
         <div class="ai-choices"><h3>使用する生成AI</h3>
           <a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><div><strong>ChatGPT</strong><small>先行検証対象</small></div><span class="arrow">↗</span></a>
         </div>
-        <div class="prompt"><div><strong>AIに送る依頼文</strong><button type="button" id="copy-prompt" class="text-btn">コピー</button></div><p id="prompt-text">添付ZIPのSTART_HERE.mdとAI_INSTRUCTIONS.mdを読み、画像を全件解析してください。不確定項目は私に確認してから処理してください。互換性の未検証状態なら本番CSVを出力しないでください。</p></div>
+        <div class="prompt"><div><strong>AIに送る依頼文</strong><button type="button" id="copy-prompt" class="text-btn">コピー</button></div><p id="prompt-text">添付ZIPのSTART_HERE.md、AI_INSTRUCTIONS.md、PROGRESS_PROTOCOL.mdを全文読み、全画像を実際に解析してください。開始・終了時刻（JST、秒単位）は実測できる場合のみ表示してください。解析を中断せず、約1分経過後の自然な区切りで進捗（確認枚数/総数・ゲージ・経過時間）を途中メッセージとして表示してみてください。進捗のための強制分割、待機、再読込、時計ポーリングや「続き」の要求はしないでください。途中送信できない場合は解析を優先し、送信できなかったことを明示してください。未確定の場合はBatch番号・画像番号・元ファイル名を示し、実在する元画像または画素非改変の切り抜きをチャット内に直接描画してから確認してください。リンク・ダウンロードだけでの確認要求はしないでください。画面上の折り返しを内部改行と即断しないでください。「分からない」は未確定のままHOLDとします。一緒に眠った時間・色違いだけ、画像で読めなければ各0の代用値です。SPECIES_AUDIT_GUIDE.mdで候補監査し、数値だけで自動訂正しないでください。開発者の試験ではPROTOTYPE_EXPORT_GATE.py --prototype-testを使用し、DEVELOPMENT_ONLY CSV実ファイルとROW_BINDING.jsonを両方提出してください。本番CSVはPROTOTYPE/HOLDを継続し、生成・納品しないでください。</p></div>
       </section>
     </main>
     <footer>非公式の補助ツールです。Pokémon Sleepおよびpokesleep-toolの開発元とは無関係です。<br>本試作は互換性実証前のため、一般公開・実運用を想定していません。</footer>
