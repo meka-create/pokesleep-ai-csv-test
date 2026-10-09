@@ -1,0 +1,131 @@
+import { makeZip } from './zip-store.js';
+
+const KIT_FILES = [
+  'START_HERE.md', 'AI_INSTRUCTIONS.md', 'READING_RULES.md',
+  'MASTER_DATA.json', 'CSV_SCHEMA.json', 'KIT_VERSION.json',
+  'VALIDATOR.py', 'RECORDS_TEMPLATE.json'
+];
+const FILES = new Map();
+let seq = 0, lastZip = null, lastName = '', busy = false, hashing = 0, hashError = false;
+const $ = s => document.querySelector(s);
+const fileInput = $('#choose-files'), selection = $('#selection'), list = $('#files');
+const buildButton = $('#build'), status = $('#message'), ready = $('#ready');
+const allowed = /\.(png|jpg|jpeg|webp)$/i;
+const MAX_ARCHIVE_BYTES = 300 * 1024 * 1024; // technical browser-memory guard, NOT empirically verified AI capacity
+function fmt(bytes) { return (bytes / 1024 / 1024).toFixed(1) + ' MB'; }
+function announce(msg, error=false) { status.textContent=msg; status.classList.toggle('error',error); }
+function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.textContent=b?'ZIP作成中…':'AI提出用ZIPを作成 ↓'; }
+function escapeHtml(x) { return x.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function digestFile(file) {
+  const bytes = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(hash)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function totals() { return [...FILES.values()].reduce((s,r)=>s+r.file.size,0); }
+function updateDuplicate() {
+  const counts = {};
+  for(const r of FILES.values()) if(r.hash) counts[r.hash] = (counts[r.hash]||0)+1;
+  const duplicates = Object.values(counts).reduce((n,c)=>n+Math.max(0,c-1),0);
+  $('#duplicate-area').hidden = !duplicates;
+  $('#duplicate-summary').textContent = `${duplicates}枚がほかの選択画像と完全に一致しています。確認のうえ残すか除外するか選んでください。`;
+}
+function resetDuplicateConfirmation(){document.querySelectorAll('input[name="duplicate-mode"]').forEach(x=>x.checked=false);}
+function render() {
+  const rows=[...FILES.values()];
+  selection.hidden = rows.length===0;
+  $('#count').textContent = rows.length+'枚'; $('#size').textContent='合計 '+fmt(totals());
+  list.replaceChildren();
+  rows.forEach(r=>{
+    const li=document.createElement('li');
+    const img=document.createElement('img'); img.src=r.url; img.alt='画像プレビュー'; img.loading='lazy';
+    const label=document.createElement('span'); label.className='filename';label.textContent=r.file.name; label.title=r.file.name;
+    const button=document.createElement('button');button.type='button';button.textContent='×';button.setAttribute('aria-label',r.file.name+' を除外');
+    button.addEventListener('click',()=>{if(busy)return; resetDuplicateConfirmation();URL.revokeObjectURL(r.url);FILES.delete(r.id);render();ready.hidden=true;lastZip=null;});
+    li.append(img,label,button);list.append(li);
+  });
+  updateDuplicate(); setBusy(false);
+}
+async function add(files) {
+  if (busy) return;
+  const arr=[...files];
+  const rejected=arr.filter(f=>!allowed.test(f.name) || !['image/png','image/jpeg','image/webp',''].includes(f.type));
+  if(rejected.length) announce(`${rejected.length}件の非対応形式を追加しませんでした。PNG/JPG/WebPのみ対応です。`,true);
+  const added=[];
+  for(const f of arr) {
+    if(rejected.includes(f)) continue;
+    const id=++seq;
+    const row={id,file:f,url:URL.createObjectURL(f),hash:null};
+    FILES.set(id,row);added.push(row);
+  }
+  resetDuplicateConfirmation();
+  ready.hidden=true;lastZip=null;
+  hashing++;render();fileInput.value='';
+  try {
+    if (!crypto?.subtle) throw new Error('SHA-256の計算にはHTTPSまたはlocalhostが必要です。');
+    for(const row of added) { row.hash=await digestFile(row.file); }
+    hashError=false;
+  } catch(error) {hashError=true;announce(error.message||String(error),true);}
+  finally {hashing--;render();}
+}
+fileInput.addEventListener('change',()=>add(fileInput.files));
+$('#clear-all').addEventListener('click',()=>{if(busy)return;resetDuplicateConfirmation();for(const r of FILES.values()) URL.revokeObjectURL(r.url);FILES.clear();ready.hidden=true;lastZip=null;render();announce('画像を解除しました。');});
+const dz = $('#dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');add(e.dataTransfer.files);});
+dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}});
+function saveZip(blob,name){const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=name; document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),45000);}
+async function build() {
+  if(!FILES.size || busy || hashing > 0 || hashError) return;
+  if (!$('#duplicate-area').hidden && !document.querySelector('input[name="duplicate-mode"]:checked')) {announce('完全重複があります。重複画像の扱いを選んでください。',true);return;}
+  if(!crypto?.subtle){announce('SHA-256計算にはHTTPSまたはlocalhostが必要です。',true);return;}
+  const bytes=totals();
+  if(bytes>MAX_ARCHIVE_BYTES){announce(`現在の試作版はブラウザのメモリ保護のため合計${fmt(MAX_ARCHIVE_BYTES)}までです。正式なAI推奨上限は実測後に決定します。`,true);return;}
+  setBusy(true);ready.hidden=true;announce('画像を検証しています…');
+  try {
+    if([...FILES.values()].some(row=>!row.hash)) throw new Error('画像ハッシュが未検証です');
+    const chosen=[];const seen=new Set();
+    const dedupe=document.querySelector('input[name="duplicate-mode"]:checked')?.value==='dedupe';
+    for(const row of FILES.values()){
+      if(dedupe&&seen.has(row.hash)) continue;
+      seen.add(row.hash);chosen.push(row);
+    }
+    if(!chosen.length) throw new Error('出力する画像がありません');
+    const archiveEntries=[];
+    const manifest=[];
+    for(let i=0;i<chosen.length;i++) {
+      const row=chosen[i],ext=row.file.name.match(/\.(png|jpg|jpeg|webp)$/i)[1].toLowerCase();
+      const imageId='IMG-'+String(i+1).padStart(4,'0');
+      const path=`images/${imageId}.${ext}`;
+      const binary=new Uint8Array(await row.file.arrayBuffer());
+      archiveEntries.push({name:path,bytes:binary});
+      manifest.push({id:imageId,path,originalFilename:row.file.name,size:binary.length,sha256:row.hash});
+    }
+    const kitData=[];
+    for(const name of KIT_FILES) {
+      const resp=await fetch('./kit-assets/'+name,{cache:'no-store'});
+      if(!resp.ok)throw new Error(`必要ファイルの取得に失敗: ${name} (${resp.status})`);
+      kitData.push({name,bytes:new Uint8Array(await resp.arrayBuffer())});
+    }
+    const version=JSON.parse(new TextDecoder().decode(kitData.find(x=>x.name==='KIT_VERSION.json').bytes));
+    if(typeof version.kitVersion!=='string'||!('productionCsvAllowed' in version)) throw new Error('キットのバージョン定義が無効です');
+    const doc={schemaVersion:'ai-input-manifest-v0.1',kitVersion:version.kitVersion,images:manifest,inputImageCount:chosen.length,
+      sourceSelectedCount:FILES.size,duplicatePolicy:dedupe?'user-selected-remove-exact':'user-selected-keep-all'};
+    archiveEntries.push(...kitData,{name:'INPUT_MANIFEST.json',bytes:new TextEncoder().encode(JSON.stringify(doc,null,2)+'\n')});
+    announce('ZIPを作成しています…');
+    lastZip=makeZip(archiveEntries);
+    lastName='PokemonSleep_AI_Kit_'+chosen.length+'images.zip';
+    $('#archive-name').textContent=lastName;
+    $('#archive-count').textContent=chosen.length+'枚 / '+fmt(lastZip.size)+' / '+version.kitVersion;
+    saveZip(lastZip,lastName);
+    ready.hidden=false;ready.scrollIntoView({behavior:'smooth',block:'start'});
+    announce(`完了：${chosen.length}枚を無加工で格納しました。互換性は未検証のため、本番CSV生成はまだ停止状態です。`);
+  } catch(err) {announce(err.message||String(err),true);console.error(err);}
+  finally {setBusy(false);}
+}
+buildButton.addEventListener('click',build);
+$('#redownload').addEventListener('click',()=>{if(lastZip)saveZip(lastZip,lastName);});
+$('#copy-prompt').addEventListener('click',async()=>{
+  try {await navigator.clipboard.writeText($('#prompt-text').textContent);$('#copy-prompt').textContent='コピーしました';setTimeout(()=>$('#copy-prompt').textContent='コピー',1800);}
+  catch {announce('クリップボードが利用できません。表示された文章を選択してコピーしてください。',true);}
+});

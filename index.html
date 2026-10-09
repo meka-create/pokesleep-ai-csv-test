@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>ポケスリ AI CSV変換キット</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark">✦</span> POKESLEEP <span class="brand-light">AI KIT</span></div>
+      <a href="https://github.com/nitoyon/pokesleep-tool" target="_blank" rel="noopener noreferrer" class="origin">pokesleep-tool ↗</a>
+    </header>
+    <main>
+      <div class="intro">
+        <span class="eyebrow">SCREENSHOT → AI → CSV</span>
+        <h1>スクショを選ぶだけ。<br><span>CSVへの準備は、ここで。</span></h1>
+        <p>画像をまとめて選び、生成AIへの提出用ZIPを作成します。解析・確認・CSV出力は移動先のAIで行います。</p>
+        <span class="status-tag">開発用プレビュー ／ 本番CSV互換は未検証</span>
+      </div>
+      <section class="panel upload-panel" aria-labelledby="upload-title">
+        <div class="section-heading"><span class="stepnum">01</span><div><h2 id="upload-title">スクリーンショットを追加</h2><p>PNG・JPG・WebP。複数枚まとめて選択できます。</p></div></div>
+        <label class="dropzone" id="dropzone" for="choose-files" tabindex="0">
+          <span class="upload-icon" aria-hidden="true">▧</span><strong>画像を選択する</strong><span>タップして複数選択・またはここにドロップ</span>
+          <input id="choose-files" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple>
+        </label>
+        <div id="selection" class="selection" hidden>
+          <div class="selection-head"><strong id="count">0枚</strong><span id="size">合計 0 MB</span><button type="button" id="clear-all" class="text-btn">すべて解除</button></div>
+          <ul id="files" class="file-list"></ul>
+          <div id="duplicate-area" class="duplicate-area" hidden>
+            <strong>同一画像が含まれています</strong>
+            <p id="duplicate-summary"></p><p>次のどちらかを選んでからZIPを作成してください。</p>
+            <label class="radio"><input name="duplicate-mode" type="radio" value="dedupe"> 同一画像を1枚にまとめる</label>
+            <label class="radio"><input name="duplicate-mode" type="radio" value="keep"> 重複していてもすべて残す</label>
+          </div>
+          <p class="privacy">画像の内容はサーバーへ送信しません。ブラウザ上でZIP化します。</p>
+        </div>
+      </section>
+      <section class="panel build-panel" aria-labelledby="build-title">
+        <div class="section-heading"><span class="stepnum">02</span><div><h2 id="build-title">AI提出用ZIPを作成</h2><p>共通指示・暫定マスター・検証プログラムを同梱します。正式版では検証済みの最新版を使用します。</p></div></div>
+        <div class="pack-details"><span>元画像は無加工</span><span>件数とSHA-256を記録</span><span>ZIPは1つ</span></div>
+        <button id="build" class="primary" type="button" disabled>AI提出用ZIPを作成 <span>↓</span></button>
+        <p class="message" id="message" role="status" aria-live="polite"></p>
+      </section>
+      <section class="panel ready" id="ready" aria-labelledby="ready-title" hidden>
+        <div class="section-heading"><span class="stepnum done">✓</span><div><h2 id="ready-title">準備ができました</h2><p>ZIPを保存したら、生成AIへ移動してください。</p></div></div>
+        <div class="download-row"><span class="doc-icon">ZIP</span><div><strong id="archive-name">PokemonSleep_AI_Kit.zip</strong><small id="archive-count"></small></div><button type="button" id="redownload" class="secondary">再ダウンロード</button></div>
+        <p class="support-caption">選択先のAIがZIPを展開し、画像を視覚的に解析し、Pythonを実行できる必要があります。対応可否は今後の実証対象です。</p>
+        <div class="ai-choices"><h3>使用する生成AI</h3>
+          <a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><div><strong>ChatGPT</strong><small>先行検証対象</small></div><span class="arrow">↗</span></a>
+        </div>
+        <div class="prompt"><div><strong>AIに送る依頼文</strong><button type="button" id="copy-prompt" class="text-btn">コピー</button></div><p id="prompt-text">添付ZIPのSTART_HERE.mdとAI_INSTRUCTIONS.mdを読み、画像を全件解析してください。不確定項目は私に確認してから処理してください。互換性の未検証状態なら本番CSVを出力しないでください。</p></div>
+      </section>
+    </main>
+    <footer>非公式の補助ツールです。Pokémon Sleepおよびpokesleep-toolの開発元とは無関係です。<br>本試作は互換性実証前のため、一般公開・実運用を想定していません。</footer>
+  </div>
+</body>
+</html>
