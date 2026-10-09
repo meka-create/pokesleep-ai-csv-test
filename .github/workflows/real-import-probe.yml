@@ -1,0 +1,42 @@
+name: Probe real pokesleep-tool CSV import (NO RELEASE)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-import-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout test repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install browser test runner
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Run real published site's import/export probe (never publishes)
+        id: probe
+        continue-on-error: true
+        run: |
+          python probe/run_import_probe.py --out probe_evidence
+      - name: Upload result report and browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: importer-probe-evidence-NOT-PRODUCTION
+          path: probe_evidence/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Fail closed when importer proof is absent
+        if: always()
+        run: |
+          if [ "${{ steps.probe.outcome }}" != "success" ]; then
+            echo 'HOLD: exact CSV re-export evidence is missing; do NOT release production CSV.' >&2
+            exit 1
+          fi
+          echo 'Probe roundtrip matched, but live site vs source git commit remains unproven; manual review required.'
+# Deliberately NO auto deploy or modifications to kit-assets/KIT_VERSION.json
