@@ -2,7 +2,7 @@
 """Evidence-first REAL browser import/export probe for pokesleep-tool.
 
 It DOES NOT promote any master, change the Pages site or release production CSV.
-Only a genuine matching CSV re-export gives UI_IMPORT_EXPORT_MATCH; otherwise HOLD.
+Only a genuine import with matching CSV re-export gives UI_IMPORT_EXPORT_MATCH; otherwise HOLD.
 This probe does not claim deployed build equals source git checkout.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ def safe_snapshot(page, path):
 
 def button_inventory(page):
     try:
-        return page.evaluate('''() => Array.from(document.querySelectorAll('button,a,[role="button"],[role="tab"],input[type="file"]'))
+        return page.evaluate('''() => Array.from(document.querySelectorAll('button,a,[role="button"],[role="tab"],[role="menuitem"],input[type="file"]'))
           .slice(0,300).map(e => ({tag:e.tagName, role:e.getAttribute('role'),
           text:(e.innerText||e.value||e.getAttribute('aria-label')||'').trim().slice(0,130),
           accept:e.getAttribute('accept'), type:e.getAttribute('type'),
@@ -65,7 +65,7 @@ def button_inventory(page):
 def click_named(page, words, attempts=10):
     """Best-effort UI discovery; don't claim success simply for clicking."""
     pat=re.compile('|'.join(map(re.escape, words)), re.I)
-    for selector in ('button','[role="button"]','[role="tab"]','a'):
+    for selector in ('[role="menuitem"]','[role="option"]','button','[role="button"]','[role="tab"]','a'):
         loc=page.locator(selector)
         for i in range(min(loc.count(), attempts)):
             node=loc.nth(i)
@@ -78,6 +78,45 @@ def click_named(page, words, attempts=10):
             except Exception:
                 continue
     return None
+
+def box_action_menu_candidates(page):
+    """Collect visibly located controls beside the lower Box tab, NEVER the global ⋮.
+
+    This is a cautious location heuristic for the current published app. A single
+    candidate is mandatory; uncertain layouts cause HOLD instead of blind clicks.
+    """
+    return page.evaluate(r'''() => {
+      const boxTabs = Array.from(document.querySelectorAll('[role="tab"]'))
+        .filter(e => (e.innerText || '').trim() === 'ボックス');
+      if (boxTabs.length !== 1) return {reason:'BOX_TAB_NOT_UNIQUE', candidates:[]};
+      const tab = boxTabs[0].getBoundingClientRect();
+      const vw = innerWidth;
+      const candidates = Array.from(document.querySelectorAll('button')).map((el, index) => {
+        const r = el.getBoundingClientRect();
+        return {index, x:r.left+r.width/2, y:r.top+r.height/2,
+          width:r.width, height:r.height, text:(el.innerText||'').trim().slice(0,90),
+          aria:el.getAttribute('aria-label'), haspopup:el.getAttribute('aria-haspopup'),
+          testids:Array.from(el.querySelectorAll('[data-testid]')).map(e=>e.getAttribute('data-testid')).slice(0,4)};
+      }).filter(e => e.width>0 && e.height>0 && e.x>vw*.75 &&
+          e.y>tab.top-65 && e.y<tab.bottom+55);
+      return {reason: candidates.length===1 ? 'SINGLE_NEAR_BOX' : 'AMBIGUOUS_NEAR_BOX',
+        boxTab:{x:tab.x,y:tab.y,width:tab.width,height:tab.height}, candidates};
+    }''')
+
+def open_box_action_menu(page, report, stage):
+    """Click uniquely situated lower-Box ⋮, only if location is unambiguous."""
+    data=box_action_menu_candidates(page)
+    report.setdefault('menuInvestigations',[]).append({'stage':stage, **data})
+    choices=data['candidates']
+    if data['reason']!='SINGLE_NEAR_BOX': return False
+    choice=choices[0]
+    # Safety: the element must look like an icon-only actions menu, not data entry.
+    if choice['text'] and choice['text'].lower() not in ('actions','more_vert','⋮','︙'):
+        return False
+    page.locator('button').nth(choice['index']).click(timeout=3000)
+    page.wait_for_timeout(700)
+    report['steps'].append('BOX_ACTION_MENU_OPENED:'+stage)
+    return True
 
 def find_csv_upload(page):
     loc=page.locator('input[type="file"]')
@@ -96,13 +135,13 @@ def find_csv_upload(page):
 def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     fixture=out/'probe_input.csv';write_fixture(fixture)
-    report={'schema':'pokesleep-real-import-probe-v0.6',
+    report={'schema':'pokesleep-real-import-probe-v0.7',
             'checkedAt':datetime.now(timezone.utc).isoformat(),
             'targetUrl':url,'status':'HOLD', 'productionCsvAllowed':False,
             'fixtureSha256':sha256(fixture), 'upstreamImporterExecuted':False,
             'importRoundTripExact':False, 'deployedAppChecked':False,
             'reason':'NOT_EXECUTED', 'steps':[], 'uiInventory':[], 'errors':[],
-            'mockOnly':bool(mock_html)}
+            'mockOnly':bool(mock_html), 'menuInvestigations':[]}
     try:
         with sync_playwright() as p:
             opts={'headless':headless}
@@ -127,9 +166,18 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                 else:
                     nav=click_named(page,['ボックス','Box'])
                     if nav: report['steps'].append('BOX_NAV:'+nav)
+                    # Try visible import actions first; the live UI hides them under
+                    # the lower Box-tab ⋮, not the global header's ⋮.
                     action=click_named(page,['インポート','読み込み','読込','Import'])
+                    if not action and nav:
+                        if open_box_action_menu(page,report,'IMPORT'):
+                            safe_snapshot(page,out/'02_box_menu_open.png')
+                            report['menuInventory']=button_inventory(page)
+                            action=click_named(page,['インポート','読み込み','読込','Import'])
                     if action: report['steps'].append('IMPORT_UI:'+action)
-                    file_node,accept=find_csv_upload(page)
+                    # Never upload to an undisclosed hidden file input: require
+                    # a visible import UI action was positively identified.
+                    file_node,accept=find_csv_upload(page) if action else (None,None)
                     report['uiInventory']=button_inventory(page)
                     safe_snapshot(page,out/'02_import_ui.png')
                     if file_node is None:
@@ -143,20 +191,30 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                         page.wait_for_timeout(2000)
                         safe_snapshot(page,out/'03_after_file_upload.png')
                         # Do NOT call this proof of import. Re-export must match every cell.
+                        downloads=[]
+                        page.on('download',lambda d:downloads.append(d))
                         export=click_named(page,['エクスポート','書き出し','Export'])
+                        if not export and nav:
+                            if open_box_action_menu(page,report,'EXPORT'):
+                                safe_snapshot(page,out/'04_export_menu_open.png')
+                                export=click_named(page,['エクスポート','書き出し','Export'])
                         if export: report['steps'].append('EXPORT_UI:'+export)
                         safe_snapshot(page,out/'04_export_ui.png')
-                        dl=None
-                        for phrase in ('CSV','ダウンロード','保存'):
-                            try:
-                                with page.expect_download(timeout=3500) as info:
-                                    action=click_named(page,[phrase])
-                                    if not action: raise RuntimeError('not found')
-                                dl=info.value
-                                report['steps'].append('DOWNLOAD:'+phrase)
-                                break
-                            except (PlaywrightTimeoutError, RuntimeError):
-                                continue
+                        page.wait_for_timeout(800)
+                        dl=downloads[-1] if downloads else None
+                        if dl is not None:
+                            report['steps'].append('DOWNLOAD:direct-export')
+                        if not dl:
+                            for phrase in ('CSV','ダウンロード','保存'):
+                                try:
+                                    with page.expect_download(timeout=3500) as info:
+                                        action=click_named(page,[phrase])
+                                        if not action: raise RuntimeError('not found')
+                                    dl=info.value
+                                    report['steps'].append('DOWNLOAD:'+phrase)
+                                    break
+                                except (PlaywrightTimeoutError, RuntimeError):
+                                    continue
                         if dl:
                             dest=out/'roundtrip_export.csv'
                             dl.save_as(str(dest))
@@ -199,3 +257,4 @@ def main():
     a=parser.parse_args()
     return browser_probe(a.site,a.out,chromium_path=a.chromium_path)
 if __name__=='__main__': sys.exit(main())
+
