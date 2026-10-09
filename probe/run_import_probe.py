@@ -132,10 +132,101 @@ def find_csv_upload(page):
     if len(csv_only)==1: return loc.nth(csv_only[0][0]),csv_only[0][1]
     return None,None
 
+def visible_import_textarea(page):
+    """Only fill a uniquely identified import text area in a visible import modal.
+
+    The deployed UI uses a clipboard-text paste form, NOT input[type=file].
+    An unrelated page text area is not a safe upload target.
+    """
+    dialogs=page.locator('[role="dialog"]')
+    relevant=[]
+    for i in range(min(dialogs.count(),12)):
+        d=dialogs.nth(i)
+        if d.is_visible() and re.search('インポート|Import',d.inner_text(),re.I):
+            relevant.append(d)
+    if len(relevant) != 1: return None,None
+    dialog=relevant[0]
+    areas=dialog.locator('textarea')
+    matches=[areas.nth(i) for i in range(min(areas.count(),12)) if areas.nth(i).is_visible() and areas.nth(i).is_enabled()]
+    if len(matches)!=1: return None,None
+    return dialog,matches[0]
+
+
+def click_import_confirmation(dialog):
+    """Require exactly one literal import submit button inside the modal."""
+    buttons=dialog.locator('button')
+    targets=[]
+    for i in range(min(buttons.count(),20)):
+        b=buttons.nth(i)
+        if b.is_visible() and b.is_enabled() and re.fullmatch(r'インポート|Import',b.inner_text().strip(),re.I):
+            targets.append(b)
+    if len(targets)!=1: return False
+    targets[0].click(timeout=5000)
+    return True
+
+
+def find_export_textarea(page):
+    """Do not read a page-global text field or developer-owned fixture as evidence."""
+    dialogs=page.locator('[role="dialog"]')
+    relevant=[]
+    for i in range(min(dialogs.count(),12)):
+        d=dialogs.nth(i)
+        if d.is_visible() and re.search('エクスポート|Export',d.inner_text(),re.I):
+            relevant.append(d)
+    if len(relevant)!=1: return None,None
+    dialog=relevant[0]
+    areas=dialog.locator('textarea')
+    matches=[areas.nth(i) for i in range(min(areas.count(),12)) if areas.nth(i).is_visible()]
+    if len(matches)!=1: return dialog,None
+    return dialog,matches[0]
+
+
+def choose_csv_export_format(dialog,report):
+    """Attempt explicitly labelled CSV controls only, never infer a random format."""
+    selects=dialog.locator('select')
+    possible=[]
+    for i in range(min(selects.count(),8)):
+        loc=selects.nth(i)
+        if not loc.is_visible(): continue
+        opts=loc.locator('option')
+        for j in range(min(opts.count(),20)):
+            opt=opts.nth(j)
+            if opt.inner_text().strip().upper()=='CSV':
+                possible.append((loc,opt.get_attribute('value')))
+    if len(possible)==1:
+        possible[0][0].select_option(possible[0][1]);report['steps'].append('EXPORT_FORMAT_SELECTED:native_csv');return True
+    # Custom UI selection may be needed on the actual site; save evidence and HOLD.
+    return False
+
+
+def read_export_csv(page,out,report):
+    """Read an export dialog's actual generated CSV, never use the source fixture."""
+    dialog,area=find_export_textarea(page)
+    if dialog is None:
+        report['reason']='EXPORT_DIALOG_NOT_FOUND'
+        return None
+    if area is None:
+        report['reason']='EXPORT_TEXTAREA_NOT_UNIQUE'
+        return None
+    text=area.input_value(timeout=5000)
+    # Some export screens start with a non-CSV view and have an explicit CSV selector.
+    if not text.lstrip('\ufeff').startswith('ニックネーム,'):
+        choose_csv_export_format(dialog,report)
+        page.wait_for_timeout(400)
+        text=area.input_value(timeout=5000)
+    report['exportTextareaLength']=len(text)
+    if not text.strip():
+        report['reason']='EXPORT_TEXTAREA_EMPTY'
+        return None
+    dest=out/'roundtrip_export.csv'
+    dest.write_text(text,encoding='utf-8')
+    report['steps'].append('EXPORT_CAPTURED_FROM_DIALOG_TEXTAREA')
+    return dest
+
 def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     fixture=out/'probe_input.csv';write_fixture(fixture)
-    report={'schema':'pokesleep-real-import-probe-v0.7',
+    report={'schema':'pokesleep-real-import-probe-v0.8',
             'checkedAt':datetime.now(timezone.utc).isoformat(),
             'targetUrl':url,'status':'HOLD', 'productionCsvAllowed':False,
             'fixtureSha256':sha256(fixture), 'upstreamImporterExecuted':False,
@@ -175,14 +266,29 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                             report['menuInventory']=button_inventory(page)
                             action=click_named(page,['インポート','読み込み','読込','Import'])
                     if action: report['steps'].append('IMPORT_UI:'+action)
-                    # Never upload to an undisclosed hidden file input: require
-                    # a visible import UI action was positively identified.
+                    # Live deployed app accepts clipboard-style CSV text via a modal textarea.
+                    # Keep the older file-input route only for verified compatible UIs.
                     file_node,accept=find_csv_upload(page) if action else (None,None)
+                    import_dialog,import_area=visible_import_textarea(page) if action else (None,None)
                     report['uiInventory']=button_inventory(page)
                     safe_snapshot(page,out/'02_import_ui.png')
-                    if file_node is None:
-                        report['reason']='CSV_FILE_INPUT_NOT_DISCOVERED'
-                    else:
+                    imported=False
+                    if import_dialog is not None and import_area is not None:
+                        text=fixture.read_text(encoding='utf-8')
+                        import_area.fill(text,timeout=6000)
+                        if import_area.input_value() != text:
+                            report['reason']='IMPORT_TEXTAREA_VALUE_MISMATCH'
+                        elif not click_import_confirmation(import_dialog):
+                            report['reason']='IMPORT_CONFIRM_NOT_UNIQUE'
+                        else:
+                            report['steps'].append('IMPORT_CSV_PASTED_AND_CONFIRMED')
+                            page.wait_for_timeout(1800)
+                            safe_snapshot(page,out/'03_after_import.png')
+                            if import_dialog.is_visible():
+                                report['reason']='IMPORT_DIALOG_STILL_OPEN'
+                            else:
+                                imported=True
+                    elif file_node is not None:
                         file_node.set_input_files(str(fixture),timeout=12000)
                         report['steps'].append('CSV_SUBMITTED_TO_FILE_INPUT:'+str(accept))
                         page.wait_for_timeout(1200)
@@ -190,7 +296,11 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                         if confirm: report['steps'].append('IMPORT_CONFIRM_CLICKED:'+confirm)
                         page.wait_for_timeout(2000)
                         safe_snapshot(page,out/'03_after_file_upload.png')
-                        # Do NOT call this proof of import. Re-export must match every cell.
+                        imported=True
+                    else:
+                        report['reason']='IMPORT_INPUT_NOT_DISCOVERED'
+                    if imported:
+                        # Re-export is the only source of round-trip evidence.
                         downloads=[]
                         page.on('download',lambda d:downloads.append(d))
                         export=click_named(page,['エクスポート','書き出し','Export'])
@@ -200,24 +310,29 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                                 export=click_named(page,['エクスポート','書き出し','Export'])
                         if export: report['steps'].append('EXPORT_UI:'+export)
                         safe_snapshot(page,out/'04_export_ui.png')
-                        page.wait_for_timeout(800)
-                        dl=downloads[-1] if downloads else None
-                        if dl is not None:
+                        page.wait_for_timeout(700)
+                        dest=read_export_csv(page,out,report) if export else None
+                        if dest is None and downloads:
+                            dest=out/'roundtrip_export.csv'
+                            downloads[-1].save_as(str(dest))
                             report['steps'].append('DOWNLOAD:direct-export')
-                        if not dl:
+                        if dest is None and file_node is not None:
+                            # Preserve pre-v0.8 file-style export support for known mock UIs.
                             for phrase in ('CSV','ダウンロード','保存'):
                                 try:
-                                    with page.expect_download(timeout=3500) as info:
-                                        action=click_named(page,[phrase])
-                                        if not action: raise RuntimeError('not found')
+                                    with page.expect_download(timeout=2500) as info:
+                                        hit=click_named(page,[phrase])
+                                        if not hit: raise RuntimeError('not found')
                                     dl=info.value
+                                    dest=out/'roundtrip_export.csv'
+                                    dl.save_as(str(dest))
                                     report['steps'].append('DOWNLOAD:'+phrase)
                                     break
                                 except (PlaywrightTimeoutError, RuntimeError):
                                     continue
-                        if dl:
-                            dest=out/'roundtrip_export.csv'
-                            dl.save_as(str(dest))
+                        if dest is None and report['reason'] in ('NOT_EXECUTED','IMPORT_INPUT_NOT_DISCOVERED'):
+                            report['reason']='CSV_REEXPORT_NOT_OBSERVED'
+                        if dest:
                             report['exportSha256']=sha256(dest)
                             try:
                                 match,comparison=compare_roundtrip(fixture,dest)
@@ -233,8 +348,6 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
                                         report['reason']='MOCK_ONLY_NEVER_UPSTREAM_PROOF'
                                 else: report['reason']='CSV_ROUNDTRIP_NOT_EXACT'
                             except Exception as exc: report['reason']='ROUNDTRIP_CSV_PARSE_ERROR:'+str(exc)
-                        else:
-                            report['reason']='CSV_REEXPORT_NOT_OBSERVED'
                 report['finalInventory']=button_inventory(page)
             finally:
                 context.close();browser.close()
