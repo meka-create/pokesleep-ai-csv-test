@@ -1,0 +1,49 @@
+name: AI Scan upstream data status only (CSV HOLD)
+on:
+  schedule:
+    # Japan 04:00 is UTC 19:00 the previous day. GitHub may delay scheduled runs.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+concurrency:
+  group: ai-scan-readonly-upstream-status
+  cancel-in-progress: false
+permissions:
+  contents: write # required ONLY to publish update-status.json
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Fetch current upstream as read-only data; do not install or execute its code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --single-branch https://github.com/nitoyon/pokesleep-tool.git "$RUNNER_TEMP/upstream" || true
+      - name: Generate fail-closed public status (never modify kit or CSV permission)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/monitor/watch_status.py --site . --upstream "$RUNNER_TEMP/upstream" --out update-status.json
+          python - <<'PY'
+          import json
+          j=json.load(open('update-status.json'))
+          assert j['productionCsvAllowed'] is False
+          assert j['state'] in ('healthy','attention')
+          assert j['monitorMode']=='READ_ONLY_NO_IMPORTER_NO_AUTOPROMOTION'
+          PY
+      - name: Publish status ONLY; no force push or master promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = main
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- update-status.json
+          test "$(git diff --cached --name-only)" = 'update-status.json' || exit 2
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'watch: read-only upstream status (CSV HOLD)'
+          git push origin HEAD:main
