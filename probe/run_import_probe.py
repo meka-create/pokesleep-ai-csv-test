@@ -195,22 +195,56 @@ def find_export_textarea(page):
     return dialog,matches[0]
 
 
-def choose_csv_export_format(dialog,report):
-    """Attempt explicitly labelled CSV controls only, never infer a random format."""
+def choose_csv_export_format(dialog, report, page):
+    """Select CSV through the genuine BoxExportDialog MUI SelectEx control."""
     selects=dialog.locator('select')
     possible=[]
     for i in range(min(selects.count(),8)):
         loc=selects.nth(i)
-        if not loc.is_visible(): continue
+        if not loc.is_visible():continue
         opts=loc.locator('option')
         for j in range(min(opts.count(),20)):
             opt=opts.nth(j)
             if opt.inner_text().strip().upper()=='CSV':
                 possible.append((loc,opt.get_attribute('value')))
     if len(possible)==1:
-        possible[0][0].select_option(possible[0][1]);report['steps'].append('EXPORT_FORMAT_SELECTED:native_csv');return True
-    # Custom UI selection may be needed on the actual site; save evidence and HOLD.
-    return False
+        possible[0][0].select_option(possible[0][1])
+        report['steps'].append('EXPORT_FORMAT_SELECTED:native_csv')
+        return True
+
+    labels=dialog.locator('span')
+    anchors=[]
+    for i in range(min(labels.count(),60)):
+        label=labels.nth(i)
+        try:
+            if not label.is_visible():continue
+            if re.fullmatch(r'出力形式\s*:?',label.inner_text().strip()):
+                parent=label.locator('xpath=..')
+                buttons=parent.locator('button')
+                if buttons.count()==1 and buttons.first.is_visible():
+                    anchors.append(buttons.first)
+        except Exception:
+            continue
+    if len(anchors)!=1:
+        report['steps'].append('EXPORT_CSV_SELECTOR_UNAVAILABLE')
+        return False
+    anchor=anchors[0]
+    anchor.click(timeout=4000)
+    menu=page.locator('[role="menuitem"]')
+    options=[]
+    for i in range(min(menu.count(),20)):
+        m=menu.nth(i)
+        if m.is_visible() and m.inner_text().strip()=='CSV':
+            options.append(m)
+    if len(options)!=1:
+        report['steps'].append('EXPORT_CSV_MENU_ITEM_NOT_UNIQUE')
+        return False
+    options[0].click(timeout=4000)
+    if anchor.inner_text().strip()!='CSV':
+        report['steps'].append('EXPORT_CSV_SELECTION_NOT_CONFIRMED')
+        return False
+    report['steps'].append('EXPORT_FORMAT_SELECTED:real_custom_menu_csv')
+    return True
 
 
 def read_export_csv(page,out,report):
@@ -225,7 +259,7 @@ def read_export_csv(page,out,report):
     text=area.input_value(timeout=5000)
     # Some export screens start with a non-CSV view and have an explicit CSV selector.
     if not text.lstrip('\ufeff').startswith('ニックネーム,'):
-        choose_csv_export_format(dialog,report)
+        choose_csv_export_format(dialog,report,page)
         page.wait_for_timeout(400)
         text=area.input_value(timeout=5000)
     report['exportTextareaLength']=len(text)
