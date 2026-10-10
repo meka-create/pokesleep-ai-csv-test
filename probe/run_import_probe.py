@@ -305,6 +305,12 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None, i
                 else:
                     page.set_content(mock_html,wait_until='domcontentloaded')
                     report['httpStatus']=200
+                # Block pointer interception by third-party advertising overlays.
+                # No app importer/exporter code or data is mocked or modified.
+                page.add_style_tag(content=('ins.adsbygoogle[data-anchor-shown], '
+                    'ins.adsbygoogle[data-anchor-status], iframe[id^="aswift_"] '
+                    '{pointer-events:none !important;}'))
+                report['steps'].append('THIRD_PARTY_AD_POINTER_INTERCEPTION_DISABLED')
                 report['pageTitle']=page.title()
                 report['steps'].append('PAGE_LOADED')
                 safe_snapshot(page,out/'01_before.png')
