@@ -1,90 +1,69 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<title>AIぶっこみスキャン</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light">
-<meta name="theme-color" content="#192c4a">
-<meta name="description" content="ポケモンスリープのスクリーンショットをAI提出用ZIPにまとめるツール。">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://meka-create.github.io/pokesleep-ai-scan/">
-<meta property="og:title" content="AIぶっこみスキャン">
-<meta property="og:description" content="スクショをまとめて、AIへ。ポケモンスリープの画像からCSVを作るためのZIPを簡単に準備。">
-<meta property="og:site_name" content="AIぶっこみスキャン">
-<meta property="og:image" content="https://meka-create.github.io/pokesleep-ai-scan/assets/ogp-card.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="AIぶっこみスキャン">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="AIぶっこみスキャン">
-<meta name="twitter:description" content="スクショをまとめて、AIへ。">
-<meta name="twitter:image" content="https://meka-create.github.io/pokesleep-ai-scan/assets/ogp-card.png">
-<link rel="canonical" href="https://meka-create.github.io/pokesleep-ai-scan/">
-<link rel="icon" sizes="32x32" type="image/png" href="./icons/favicon-32.png">
-<link rel="icon" sizes="192x192" type="image/png" href="./icons/icon-192.png">
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
-<link rel="manifest" href="./manifest.webmanifest">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="AIぶっこみスキャン">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="stylesheet" href="./styles.css?v=step2-cobalt-20261010-v3">
-<script type="module" src="./app.js?v=step2-cobalt-20261010-v3"></script>
-<script type="module" src="./update-status.js?v=20261010-watch-ui-minimal-1"></script>
-<script defer src="./ui-extras.js?v=step2-cobalt-20261010-v3"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>ポケスリ AI CSV変換キット</title>
+  <link rel="stylesheet" href="styles.css?v=20261010-watch-ui-minimal-2">
+  <script type="module" src="app.js?v=20261010-ai-bukkomi-midfix1"></script>
+  <script type="module" src="update-status.js?v=20261010-watch-ui-minimal-1"></script>
 </head>
 <body>
-<div class="page">
-  <header class="masthead">
-    <div class="brand" aria-label="AIぶっこみスキャン">
-      <img class="brand-mark" src="./icons/icon-192.png" alt="">
-      <span>AIぶっこみスキャン</span>
-    </div>
-    <div class="masthead-actions">
-      <button id="update-watch-button" data-state="pending" hidden type="button" aria-label="データ更新のお知らせ" title="データ更新のお知らせ" class="action-icon warning-icon">⚠</button>
-      <button id="tipsBtn" type="button" class="tips-btn" aria-haspopup="dialog" aria-controls="tipsDialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.5 2.5 0 0 1 4.7 1.2c0 2-2.5 2.4-2.5 4.2M12 17.5h.01"/></svg><span>TIPS</span></button>
-      <div class="more-wrap">
-        <button id="moreBtn" class="more-btn" type="button" aria-label="メニュー" aria-haspopup="menu" aria-controls="moreMenu" aria-expanded="false" title="メニュー"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
-        <div id="moreMenu" class="more-menu" role="menu" hidden><button id="sourcesMenuItem" role="menuitem" type="button">出典</button></div>
+  <div class="page">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark">✦</span> POKESLEEP <span class="brand-light">AI KIT</span></div>
+      <div class="masthead-actions"><button id="update-watch-button" data-state="pending" hidden type="button" aria-label="データ更新のお知らせを表示" title="データ更新のお知らせ">⚠️</button><a href="https://github.com/nitoyon/pokesleep-tool" target="_blank" rel="noopener noreferrer" class="origin">pokesleep-tool ↗</a></div>
+    </header>
+    <dialog id="update-watch-dialog" aria-labelledby="update-watch-title" aria-describedby="update-watch-state">
+      <div class="watch-modal-header"><h2 id="update-watch-title">データ更新のお知らせ</h2><button id="update-watch-close" type="button" aria-label="閉じる">×</button></div>
+      <p id="update-watch-state" class="watch-lead">データの更新状況を確認しています。</p>
+      <p class="watch-public-note">現在のデータは引き続きご利用いただけます。</p>
+      <div class="watch-actions"><button type="button" id="update-watch-close-bottom">閉じる</button></div>
+    </dialog>
+    <main>
+      <div class="intro">
+        <span class="eyebrow">SCREENSHOT → AI → CSV</span>
+        <h1>スクショを選ぶだけ。<br><span>CSVへの準備は、ここで。</span></h1>
+        <p>画像をまとめて選び、生成AIへの提出用ZIPを作成します。解析・確認・CSV出力は移動先のAIで行います。</p>
+        <span class="status-tag">開発用プレビュー ／ 本番CSV互換は未検証</span>
       </div>
-    </div>
-  </header>
-  <main>
-    <section class="panel upload-panel" aria-labelledby="upload-title">
-      <div class="section-heading"><span class="stepnum">01</span><h1 id="upload-title">スクリーンショットを追加</h1></div>
-      <label id="dropzone" class="dropzone" for="choose-files" tabindex="0">
-        <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="1.5"/><path d="m5 17 5-5 3 3 2-2 4 4"/></svg></span>
-        <strong>画像を選択する</strong><span class="drop-hint">PNG/JPG/WebP・複数選択可</span>
-        <input id="choose-files" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple>
-      </label>
-      <div id="selection" class="selection" hidden>
-        <div class="selection-head"><strong id="count">0枚</strong><span id="size">合計 0 MB</span><button type="button" id="clear-all" class="text-btn">すべて削除</button></div>
-        <ul id="files" class="file-list"></ul>
-        <div id="duplicate-area" class="duplicate-area" hidden><strong>同一画像が含まれています</strong><p id="duplicate-summary"></p><p>重複画像の扱いを選択してください。</p><label class="radio"><input name="duplicate-mode" type="radio" value="dedupe"> 同一画像を1枚にまとめる</label><label class="radio"><input name="duplicate-mode" type="radio" value="keep"> すべて残す</label></div>
-        <p class="privacy">画像は端末内でZIP化されます。</p>
-      </div>
-    </section>
-    <section class="panel build-panel" aria-labelledby="build-title">
-      <div class="section-heading"><span class="stepnum">02</span><h2 id="build-title">AI提出用ZIPを作成</h2></div>
-      <button id="build" class="primary" type="button" disabled><span>ZIPを作成する</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg></button>
-      <div id="zip-progress" class="zip-progress" hidden><div class="zip-progress-track"><div id="zip-progress-fill"></div></div><span id="zip-progress-label">準備中…</span></div><p class="message" id="message" role="status" aria-live="polite"></p>
-    </section>
-    <section class="panel ready" id="ready" aria-labelledby="ready-title" hidden>
-      <div class="section-heading"><span class="stepnum done">✓</span><h2 id="ready-title">ZIPの準備ができました</h2></div>
-      <div class="download-row"><span class="doc-icon">ZIP</span><div><strong id="archive-name">AI_Bukkomi_Scan.zip</strong><small id="archive-count"></small></div><button type="button" id="redownload" class="secondary">保存</button></div>
-      <section class="handoff" aria-label="生成AIに送る手順">
-        <h3 class="handoff-title">続けて生成AIで解析</h3>
-        <div class="handoff-step"><span class="handoff-index">1</span><strong>依頼文をコピー</strong><span class="handoff-hint">右上のアイコンからコピー</span></div>
-        <div class="prompt"><div class="prompt-head"><span class="prompt-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l4 4v14H4V3h4Zm7 0v5h5M7 12h10M7 16h8"/></svg>AIに送る依頼文</span><button id="copy-prompt" type="button" aria-label="依頼文をコピー" title="依頼文をコピー" class="copy-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><p class="prompt-text" id="prompt-text">添付ZIP内の START_HERE.md を最初に読み、そこで指定される必読ファイル・手順・確認条件・出力条件を厳密に守ってください。INPUT_MANIFEST.json の全画像を実際に解析し、未確定事項や実行不能な工程は推測せず報告してください。</p><span class="copy-feedback" id="copy-feedback" role="status" aria-live="polite"></span></div>
-        <div class="handoff-step"><span class="handoff-index">2</span><strong>生成AIを開く</strong></div>
-        <a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><strong>ChatGPTを開く</strong><span class="arrow">↗</span></a>
-        <div class="handoff-step final-step"><span class="handoff-index">3</span><strong>保存したZIPを添付し、依頼文を貼り付けて送信</strong></div>
+      <section class="panel upload-panel" aria-labelledby="upload-title">
+        <div class="section-heading"><span class="stepnum">01</span><div><h2 id="upload-title">スクリーンショットを追加</h2><p>PNG・JPG・WebP。複数枚まとめて選択できます。</p></div></div>
+        <label class="dropzone" id="dropzone" for="choose-files" tabindex="0">
+          <span class="upload-icon" aria-hidden="true">▧</span><strong>画像を選択する</strong><span>タップして複数選択・またはここにドロップ</span>
+          <input id="choose-files" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple>
+        </label>
+        <div id="selection" class="selection" hidden>
+          <div class="selection-head"><strong id="count">0枚</strong><span id="size">合計 0 MB</span><button type="button" id="clear-all" class="text-btn">すべて解除</button></div>
+          <ul id="files" class="file-list"></ul>
+          <div id="duplicate-area" class="duplicate-area" hidden>
+            <strong>同一画像が含まれています</strong>
+            <p id="duplicate-summary"></p><p>次のどちらかを選んでからZIPを作成してください。</p>
+            <label class="radio"><input name="duplicate-mode" type="radio" value="dedupe"> 同一画像を1枚にまとめる</label>
+            <label class="radio"><input name="duplicate-mode" type="radio" value="keep"> 重複していてもすべて残す</label>
+          </div>
+          <p class="privacy">画像の内容はサーバーへ送信しません。ブラウザ上でZIP化します。</p>
+        </div>
       </section>
-    </section>
-  </main>
-</div>
-<dialog id="update-watch-dialog" aria-labelledby="update-watch-title" aria-describedby="update-watch-state"><div class="watch-modal-header"><h2 id="update-watch-title">データ更新のお知らせ</h2><button id="update-watch-close" type="button" aria-label="閉じる">×</button></div><p id="update-watch-state" class="watch-lead">更新状況を確認しています。</p><p class="watch-public-note">現在のデータは引き続き利用できます。</p><div class="watch-actions"><button id="update-watch-close-bottom" type="button">閉じる</button></div></dialog>
-<dialog id="tipsDialog" class="modal" aria-labelledby="tipsDialogTitle"><div class="modal-head"><h2 id="tipsDialogTitle">TIPS</h2><button id="tipsClose" class="close-icon" type="button" aria-label="閉じる">×</button></div><div class="modal-body"><p class="tips-lead">食材から性格までが入るスクショを選んでください。<br>性格は必ず入れてください。食材は少し欠けていても解析できます。</p><figure class="tips-example"><img src="https://meka-create.github.io/pokesleep-scan/assets/example-screenshot.png" alt="スクリーンショットの例" loading="lazy"><figcaption>複数枚まとめて選択できます</figcaption></figure></div></dialog>
-<dialog id="sourcesDialog" class="modal" aria-labelledby="sourcesDialogTitle"><div class="modal-head"><h2 id="sourcesDialogTitle">出典</h2><button class="close-icon" type="button" data-close-dialog="sourcesDialog" aria-label="閉じる">×</button></div><div class="modal-body"><p class="info-copy">利用しているデータは「<a href="https://wikiwiki.jp/poke_sleep/" target="_blank" rel="noopener noreferrer">ポケモンスリープ攻略・検証Wiki</a>」「<a href="https://pks.raenonx.cc/" target="_blank" rel="noopener noreferrer">RaenonX</a>」「<a href="https://github.com/nitoyon/pokesleep-tool" target="_blank" rel="noopener noreferrer">pokesleep-tool</a>」を参照しています。</p></div></dialog>
+      <section class="panel build-panel" aria-labelledby="build-title">
+        <div class="section-heading"><span class="stepnum">02</span><div><h2 id="build-title">AI提出用ZIPを作成</h2><p>共通指示・暫定マスター・検証プログラム・種族候補の独立監査器を同梱します。正式版では検証済みの最新版を使用します。</p></div></div>
+        <p class="privacy">CSVの「一緒に眠った時間」「色違い」は確認を求めません。不明な場合はそれぞれ0を設定します（実際の値を保証するものではありません）。</p>
+        <div class="pack-details"><span>元画像は無加工</span><span>件数とSHA-256を記録</span><span>ZIPは1つ</span></div>
+        <button id="build" class="primary" type="button" disabled>AI提出用ZIPを作成 <span>↓</span></button>
+        <p class="message" id="message" role="status" aria-live="polite"></p>
+      </section>
+      <section class="panel ready" id="ready" aria-labelledby="ready-title" hidden>
+        <div class="section-heading"><span class="stepnum done">✓</span><div><h2 id="ready-title">準備ができました</h2><p>ZIPを保存したら、生成AIへ移動してください。</p></div></div>
+        <div class="download-row"><span class="doc-icon">ZIP</span><div><strong id="archive-name">PokemonSleep_AI_Kit.zip</strong><small id="archive-count"></small></div><button type="button" id="redownload" class="secondary">再ダウンロード</button></div>
+        <p class="support-caption">選択先のAIがZIPを展開し、画像を視覚的に解析し、Pythonを実行できる必要があります。対応可否は今後の実証対象です。</p>
+        <div class="ai-choices"><h3>使用する生成AI</h3>
+          <a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><div><strong>ChatGPT</strong><small>先行検証対象</small></div><span class="arrow">↗</span></a>
+        </div>
+        <div class="prompt"><div><strong>AIに送る依頼文</strong><button type="button" id="copy-prompt" class="text-btn">コピー</button></div><p id="prompt-text">添付ZIP内の START_HERE.md を最初に読み、そこで指定される必読ファイル・手順・確認条件・出力条件を厳密に守ってください。INPUT_MANIFEST.json の全画像を実際に解析し、未確定事項や実行不能な工程は推測せず報告してください。</p></div>
+      </section>
+    </main>
+    <footer>非公式の補助ツールです。Pokémon Sleepおよびpokesleep-toolの開発元とは無関係です。<br>本試作は互換性実証前のため、一般公開・実運用を想定していません。</footer>
+  </div>
 </body>
 </html>
