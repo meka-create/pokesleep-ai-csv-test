@@ -38,6 +38,7 @@ class UpstreamSyncTests(unittest.TestCase):
         self.data={'ingredients':copy.deepcopy(self.legacy['ingredients']),
                    'natures':{x['en']:x['ja'] for x in self.legacy['natures']},
                    'subskill':{x['en']:x['ja'] for x in self.legacy['subskills']}}
+        self.active_subskills=[x['en'] for x in self.legacy['subskills']]
         self.write()
     def write(self):
         for path,obj in ((self.src/'data/pokemon.json',self.src_json),
@@ -45,6 +46,21 @@ class UpstreamSyncTests(unittest.TestCase):
                          (self.assets/'data.json',self.data),
                          (self.assets/'skills.json',{'skills':self.skills})):
             path.write_text(json.dumps(obj,ensure_ascii=False))
+        # Deterministic selectable-skill TS contract (not a fabricated browser proof).
+        util=self.src/'util';util.mkdir(exist_ok=True)
+        groups=[('GoldSubSkillType','goldSubSkillNames',self.active_subskills[:7]),
+                ('BlueSubSkillType','blueSubSkillNames',self.active_subskills[7:13]),
+                ('WhiteSubSkillType','whiteSubSkillNames',self.active_subskills[13:])]
+        code=[]
+        for typ,member,values in groups:
+            code.append('type '+typ+' = '+ ' | '.join(json.dumps(v) for v in values)+';')
+        code.append('export type SubSkillType = GoldSubSkillType | BlueSubSkillType | WhiteSubSkillType;')
+        code.append('class SubSkill {')
+        for typ,member,values in groups:
+            code.append('private static '+member+': '+typ+'[] = ['+', '.join(json.dumps(v) for v in values)+'];')
+        code.append('private static subSkillNames: SubSkillType[] = [...this.goldSubSkillNames,...this.blueSubSkillNames,...this.whiteSubSkillNames];')
+        code.append('}')
+        (util/'SubSkill.ts').write_text('\n'.join(code),encoding='utf-8')
     def generate(self):
         self.write()
         return project(self.base,self.legacy,allow_fixture=True)
@@ -85,6 +101,7 @@ class UpstreamSyncTests(unittest.TestCase):
         self.data['ingredients']['apple']='りんご【新表記】'
         self.data['subskill']['Helping Bonus']='おてつだいボーナス【新表記】'
         self.data['subskill']['Future Nonstandard Subskill']='未来の追加サブスキル'
+        self.active_subskills.append('Future Nonstandard Subskill')
         self.data['natures']['Hardy']='がんばりや【新表記】'
         master,diff=self.generate()
         self.assertIn('Future Nonstandard Subskill',diff['newSubskillKeys'])
@@ -99,6 +116,29 @@ class UpstreamSyncTests(unittest.TestCase):
         self.data['subskill']['Helping Bonus']=''
         # Existing translations must not silently become empty.
         with self.assertRaisesRegex(SyncError,'サブスキル'):self.generate()
+    def test_six_translation_labels_are_not_selectable_subskills(self):
+        labels={'Gold colored':'金色サブスキル','Skill Level Up':'スキルレベルアップ',
+                'Skill Trigger':'スキル確率アップ','Helping Speed':'おてつだいスピード',
+                'Ingredient Finder':'食材確率アップ','Inventory Up':'最大所持数アップ'}
+        self.data['subskill'].update(labels)
+        master,diff=self.generate()
+        self.assertEqual(diff['newSubskillKeys'],[])
+        self.assertEqual(len(master['subskills']),17)
+        self.assertEqual(diff['nonSelectableSubskillLabelKeys'],sorted(labels))
+        self.assertEqual(diff['upstreamSelectableSubskillCount'],17)
+    def test_missing_active_subskill_translation_fails_closed(self):
+        self.data['subskill']['Helping Bonus']=''
+        with self.assertRaisesRegex(SyncError,'サブスキル'):self.generate()
+    def test_dynamic_or_ambiguous_type_definition_fails_closed(self):
+        self.write()
+        f=self.src/'util/SubSkill.ts'
+        text=f.read_text()
+        f.write_text(text.replace('...this.whiteSubSkillNames','...this.unrecognizedSubSkillNames'))
+        with self.assertRaisesRegex(SyncError,'統合サブスキル一覧'):project(self.base,self.legacy,allow_fixture=True)
+    def test_missing_source_type_file_fails_closed(self):
+        self.write()
+        (self.src/'util/SubSkill.ts').unlink()
+        with self.assertRaisesRegex(SyncError,'選択可能サブスキル定義'):project(self.base,self.legacy,allow_fixture=True)
     def test_missing_upstream_file_is_fatal(self):
         (self.assets/'skills.json').unlink()
         with self.assertRaisesRegex(SyncError,'必要ファイル'):project(self.base,self.legacy,allow_fixture=True)

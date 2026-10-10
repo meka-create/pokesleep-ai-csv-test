@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HEADER = ['ニックネーム','ポケモン','レベル','スキルレベル','食材1','食材2','食材3',
           'メインスキル','せいかく','Lv10','Lv25','Lv50','Lv70','Lv80','一緒に眠った時間','色違い']
 SOURCES = {'pokemon':'src/data/pokemon.json','pokemonsJa':'src/i18n/ja/pokemons.json',
-           'dataJa':'src/i18n/ja/data.json','skillsJa':'src/i18n/ja/skills.json'}
+           'dataJa':'src/i18n/ja/data.json','skillsJa':'src/i18n/ja/skills.json',
+         'subskillType':'src/util/SubSkill.ts'}
 
 class GateError(Exception):
     pass

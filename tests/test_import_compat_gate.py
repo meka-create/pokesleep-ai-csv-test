@@ -70,7 +70,8 @@ class ImportGateTests(unittest.TestCase):
         self.assertIn('STAGED_SOURCE_MISMATCH:dataJa',r['validationErrors'])
     def test_no_upstream_source_fails_closed(self):
         self.code_path.unlink()
-        with self.assertRaisesRegex(GateError,'見つかりません'):self.run_gate()
+        r=self.run_gate()
+        self.assertIn('IMPORTER_NOT_IDENTIFIED',r['validationErrors'])
     def test_false_claim_of_deployed_test_blocks(self):
         ev=self.make_evidence();ev['deployedAppChecked']=False
         path=self.base/'evidence.json';path.write_text(json.dumps(ev))

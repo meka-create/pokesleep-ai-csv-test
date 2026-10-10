@@ -39,7 +39,8 @@ class AutoPromotionTests(unittest.TestCase):
         save(self.site/'kit-assets/KIT_VERSION.json',v)
         self.bundle=self.root/'bundle';self.bundle.mkdir()
         for key,rel in (('pokemon','src/data/pokemon.json'),('pokemonsJa','src/i18n/ja/pokemons.json'),
-                        ('dataJa','src/i18n/ja/data.json'),('skillsJa','src/i18n/ja/skills.json')):
+                        ('dataJa','src/i18n/ja/data.json'),('skillsJa','src/i18n/ja/skills.json'),
+                        ('subskillType','src/util/SubSkill.ts')):
             target=self.bundle/'upstream_source'/rel;target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copy2(self.source.base/rel,target)
         candidate,diff=project(self.source.base,self.old,allow_fixture=True)
@@ -116,6 +117,11 @@ class AutoPromotionTests(unittest.TestCase):
         proof=json.loads((self.bundle/'PROMOTION_PROOF.json').read_text());proof['candidateSha256']=digest(self.bundle/'MASTER_DATA.candidate.json')
         save(self.bundle/'PROMOTION_PROOF.json',proof)
         with self.assertRaisesRegex(PromotionHold,'SOURCE_PROJECTION_NOT_REPRODUCIBLE'):
+            build_patch(self.bundle,self.site,self.root/'out',run_id=RUN,base_sha=BASE)
+    def test_subskill_type_source_tamper_rejected(self):
+        path=self.bundle/'upstream_source/src/util/SubSkill.ts'
+        path.write_bytes(path.read_bytes()+b'\n// tamper')
+        with self.assertRaisesRegex(PromotionHold,'UPSTREAM_SOURCE_MISMATCH'):
             build_patch(self.bundle,self.site,self.root/'out',run_id=RUN,base_sha=BASE)
     def test_untrusted_source_file_changed_rejected(self):
         path=self.bundle/'upstream_source/src/data/pokemon.json';path.write_bytes(path.read_bytes()+b' ')

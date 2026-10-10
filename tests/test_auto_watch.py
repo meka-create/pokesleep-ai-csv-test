@@ -25,6 +25,7 @@ class WatchTests(UpstreamSyncTests):
         self.assertTrue((self.out/'MASTER_DATA.candidate.json').is_file())
     def test_new_subskill_requires_verification_and_old_master_unchanged(self):
         self.data['subskill']['Future Nonstandard Subskill']='未来サブスキル'
+        self.active_subskills.append('Future Nonstandard Subskill')
         self.write()
         before=(self.kit/'MASTER_DATA.json').read_bytes()
         calls=[]
@@ -36,6 +37,17 @@ class WatchTests(UpstreamSyncTests):
         self.assertEqual(status['reasonCode'],'UPSTREAM_PREFLIGHT_FAILED')
         self.assertEqual(len(calls),1)
         self.assertIn('Future Nonstandard Subskill',json.loads((self.out/'UPSTREAM_DIFF.json').read_text())['newSubskillKeys'])
+        self.assertEqual(before,(self.kit/'MASTER_DATA.json').read_bytes())
+    def test_six_display_only_labels_do_not_trigger_daily_warning(self):
+        self.data['subskill'].update({'Gold colored':'金色サブスキル','Skill Level Up':'スキルレベルアップ',
+          'Skill Trigger':'スキル確率アップ','Helping Speed':'おてつだいスピード',
+          'Ingredient Finder':'食材確率アップ','Inventory Up':'最大所持数アップ'})
+        self.write()
+        before=(self.kit/'MASTER_DATA.json').read_bytes()
+        status=execute(self.base,self.kit,self.out,fixture=True)
+        self.assertEqual(status['reasonCode'],'NO_CHANGE',status)
+        self.assertEqual(status['state'],'healthy',status)
+        self.assertFalse(status['productionCsvAllowed'])
         self.assertEqual(before,(self.kit/'MASTER_DATA.json').read_bytes())
     def test_corrupt_upstream_warns_and_does_not_change_master(self):
         self.names.pop('Bulbasaur');self.write()
@@ -65,5 +77,7 @@ class WatchTests(UpstreamSyncTests):
         self.assertIn('real browser success',text)
         self.assertIn('contents: read',text)
         self.assertNotIn('git add .',text)
+        self.assertIn('Final audit gate',text)
+        self.assertIn("steps.e2e.outcome == 'failure'",text)
 
 if __name__=='__main__':unittest.main()

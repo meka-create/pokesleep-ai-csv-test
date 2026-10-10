@@ -165,6 +165,20 @@ def click_import_confirmation(dialog):
     return True
 
 
+def inspect_import_rejection(dialog):
+    """Collect bounded, developer-only UI validation diagnostics; never treat as CSV proof."""
+    try:
+        return dialog.evaluate(r'''(node) => {
+          const visible = el => !!(el.getBoundingClientRect().height || el.getBoundingClientRect().width);
+          const candidates = Array.from(node.querySelectorAll('[role="alert"], [aria-invalid="true"], .MuiAlert-root, table, li, p'))
+            .filter(visible).map(el => (el.innerText || el.textContent || '').trim())
+            .filter(x => x && /エラー|読み取|不正|正しく|失敗|invalid|error|Lv(?:10|25|50|70|80)|行目/i.test(x));
+          const summary = (node.innerText || '').trim();
+          return {summary:summary.slice(0,2400), validationMessages:[...new Set(candidates)].slice(0,25).map(s=>s.slice(0,350))};
+        }''')
+    except Exception as exc:
+        return {'summary':'','validationMessages':[], 'inspectionError':type(exc).__name__}
+
 def find_export_textarea(page):
     """Do not read a page-global text field or developer-owned fixture as evidence."""
     dialogs=page.locator('[role="dialog"]')
@@ -294,7 +308,11 @@ def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None, i
                             page.wait_for_timeout(1800)
                             safe_snapshot(page,out/'03_after_import.png')
                             if import_dialog.is_visible():
-                                report['reason']='IMPORT_DIALOG_STILL_OPEN'
+                                report['importValidation']=inspect_import_rejection(import_dialog)
+                                excerpt=report['importValidation'].get('summary','')
+                                report['reason']='IMPORTER_VALIDATION_REJECTED' if re.search(
+                                    r'正しく読み取|読み取れません|不正|エラー|invalid|error|失敗',excerpt,re.I
+                                ) else 'IMPORT_DIALOG_STILL_OPEN'
                             else:
                                 imported=True
                     elif file_node is not None:

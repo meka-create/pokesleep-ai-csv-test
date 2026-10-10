@@ -59,10 +59,55 @@ def validate_upstream(source):
     require(len(ingredients)>=15 and len(natures)==25 and len(subskills)>=17,'翻訳定義の数が異常')
     return obj,paths
 
+# Selectable subskills are defined in executable application source, NOT in the
+# translation dictionary (which also contains headings and display-only labels).
+# Parse the closed literal enum + ordered groups. Any syntax or grouping change
+# must hold for human audit, never silently drop a future selectable skill.
+def selectable_subskills(source):
+    path=Path(source)/'src/util/SubSkill.ts'
+    require(path.is_file(),'上流の選択可能サブスキル定義がありません: src/util/SubSkill.ts')
+    code=path.read_text(encoding='utf-8')
+    # Remove TS comments; reject template strings/dynamic expressions below.
+    code=re.sub(r'/\*.*?\*/|//[^\n]*','',code,flags=re.S)
+    groups=(('GoldSubSkillType','goldSubSkillNames'),
+            ('BlueSubSkillType','blueSubSkillNames'),
+            ('WhiteSubSkillType','whiteSubSkillNames'))
+    union=re.search(r'export\s+type\s+SubSkillType\s*=\s*(.*?);',code,re.S)
+    require(union is not None, 'SubSkillType定義が読み取れません')
+    union_types=re.findall(r'\b(?:GoldSubSkillType|BlueSubSkillType|WhiteSubSkillType)\b',union.group(1))
+    require(union_types==[g[0] for g in groups] and
+            not re.sub(r'\b(?:GoldSubSkillType|BlueSubSkillType|WhiteSubSkillType)\b|[|\s]','',union.group(1)),
+            '選択可能サブスキル種別の構造が変わりました')
+    result=[]
+    for typename,member in groups:
+        typ=re.search(r'(?<![\w])type\s+'+typename+r'\s*=\s*(.*?);',code,re.S)
+        array=re.search(r'\b'+member+r'\s*:\s*'+typename+r'\[\]\s*=\s*\[(.*?)\]\s*;',code,re.S)
+        require(typ is not None and array is not None,'サブスキル群が不明: '+typename)
+        values=re.findall(r'"([^"\n]+)"',typ.group(1))
+        actual=re.findall(r'"([^"\n]+)"',array.group(1))
+        require(values and values==actual and len(values)==len(set(values)),
+                'サブスキル群の列挙と型が不一致: '+typename)
+        for content in (typ.group(1),array.group(1)):
+            require(not re.sub(r'"[^"\n]+"|[|,\s]','',content),
+                    'サブスキル群の形式が未知: '+typename)
+        result+=values
+    aggregator=re.search(r'(?<![\w])subSkillNames\s*:\s*SubSkillType\[\]\s*=\s*\[(.*?)\]\s*;',code,re.S)
+    require(aggregator is not None,'SubSkillの統合集合が読み取れません')
+    agg=re.findall(r'\.\.\.this\.(\w+)',aggregator.group(1))
+    require(agg==[g[1] for g in groups] and
+            not re.sub(r'\.\.\.this\.\w+|[,\s]','',aggregator.group(1)),
+            '統合サブスキル一覧の構造が変わりました')
+    require(len(result)==len(set(result)) and len(result)>=17,
+            '選択可能サブスキルの重複・欠落')
+    return result
+
 def project(source, legacy, allow_fixture=False):
     obj,paths=validate_upstream(source)
     commit=source_commit(source,allow_fixture)
     names=obj['pokemonsJa']['pokemons'];ja=obj['dataJa'];skills=obj['skillsJa']['skills']
+    active_subskills=selectable_subskills(source)
+    require(all(k in ja['subskill'] and isinstance(ja['subskill'][k],str) and ja['subskill'][k] for k in active_subskills),
+            '選択可能サブスキルの翻訳が不足しています')
     legacy_by_en={p['name_en']:p for p in legacy['pokemon']}
     ingredient_names=ja['ingredients']
     used_names=[];used_ids=[];result=[]
@@ -110,7 +155,8 @@ def project(source, legacy, allow_fixture=False):
     all_subskills=[]
     # Keep subskill metadata of known entries; completely new entries are staged
     # without untrusted values, and compatibility must be verified separately.
-    for name,translated in ja['subskill'].items():
+    for name in active_subskills:
+        translated=ja['subskill'][name]
         if name in old_skills:
             all_subskills.append({**old_skills[name], 'ja':translated})
         else:
@@ -133,7 +179,8 @@ def project(source, legacy, allow_fixture=False):
             'origin':'pokesleep-tool directly (staged, NOT import verified)',
             'upstream':'https://github.com/nitoyon/pokesleep-tool',
             'sourceCommit':commit,
-            'sourceFilesSha256':{label:hashlib.sha256(path.read_bytes()).hexdigest() for label,path in paths.items()},
+            'sourceFilesSha256':{**{label:hashlib.sha256(path.read_bytes()).hexdigest() for label,path in paths.items()},
+                                 'subskillType':hashlib.sha256((source/'src/util/SubSkill.ts').read_bytes()).hexdigest()},
             'verification':'SOURCE STRUCTURE ONLY; import/deployed-app/E2E NOT verified'
         }
     }
@@ -160,6 +207,8 @@ def project(source, legacy, allow_fixture=False):
         'newIngredientKeys':sorted(set(ingredient_names)-set(old_ingredients)),
         'removedIngredientKeys':sorted(set(old_ingredients)-set(ingredient_names)),
         'changedIngredientTranslations':translation_changes(old_ingredients,ingredient_names),
+        'upstreamSelectableSubskillCount':len(active_subskills),
+        'nonSelectableSubskillLabelKeys':sorted(set(ja['subskill'])-set(active_subskills)),
         'newSubskillKeys':sorted(set(new_subskills)-set(old_subskills)),
         'removedSubskillKeys':sorted(set(old_subskills)-set(new_subskills)),
         'changedSubskillTranslations':translation_changes(old_subskills,new_subskills),

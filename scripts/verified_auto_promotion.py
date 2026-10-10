@@ -18,7 +18,8 @@ from sync_upstream import project
 
 class PromotionHold(Exception):pass
 SOURCES={'pokemon':'src/data/pokemon.json','pokemonsJa':'src/i18n/ja/pokemons.json',
-         'dataJa':'src/i18n/ja/data.json','skillsJa':'src/i18n/ja/skills.json'}
+         'dataJa':'src/i18n/ja/data.json','skillsJa':'src/i18n/ja/skills.json',
+         'subskillType':'src/util/SubSkill.ts'}
 FROZEN=('CSV_SCHEMA.json','VALIDATOR.py','SPECIES_AUDIT.py',
         'PROTOTYPE_EXPORT_GATE.py','RELEASE_EXPORT_GATE.py')
 
@@ -111,7 +112,7 @@ def validate_package(bundle,site,*,run_id,base_sha,upstream_code_dir=None):
         need(head==commit,'PINNED_SOURCE_CHECKOUT_MISMATCH')
         need(inspect_code(root)['sourceCodeSha256']==proof['sourceCodeSha256'],'UPSTREAM_CODE_FINGERPRINT_MISMATCH')
         for label,name in SOURCES.items():need(digest(root/name)==digest(assert_files[name]),'UPSTREAM_REAL_SOURCE_MISMATCH:'+label)
-    # Recreate the candidate from the FOUR verified upstream JSON blobs; do not
+    # Recreate the candidate from the pinned verified source data and TypeScript skill definitions; do not
     # execute any upstream Python/Node in the privileged publication process.
     actual_sha=candidate['provenance'].get('sourceFilesSha256',{})
     for label,path in SOURCES.items():need(actual_sha.get(label)==digest(assert_files[path]),'UPSTREAM_SOURCE_MISMATCH:'+label)

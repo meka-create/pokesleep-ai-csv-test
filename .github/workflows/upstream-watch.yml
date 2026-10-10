@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p promotion_input/upstream_source/src/data promotion_input/upstream_source/src/i18n/ja
+          mkdir -p promotion_input/upstream_source/src/data promotion_input/upstream_source/src/i18n/ja promotion_input/upstream_source/src/util
           cp upstream_staging/MASTER_DATA.candidate.json promotion_input/
           cp upstream_staging/UPSTREAM_DIFF.json promotion_input/
           cp upstream_staging/AUTO_VECTORS.csv promotion_input/
@@ -117,6 +117,7 @@ jobs:
           cp upstream_staging/e2e/live/roundtrip_export.csv promotion_input/live_roundtrip_export.csv
           cp "$RUNNER_TEMP/upstream/src/data/pokemon.json" promotion_input/upstream_source/src/data/
           cp "$RUNNER_TEMP/upstream/src/i18n/ja/"{pokemons,data,skills}.json promotion_input/upstream_source/src/i18n/ja/
+          cp "$RUNNER_TEMP/upstream/src/util/SubSkill.ts" promotion_input/upstream_source/src/util/
       - name: Preserve audit and browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,6 +142,12 @@ jobs:
           path: promotion_input/
           retention-days: 2
           if-no-files-found: error
+      - name: Final audit gate — never mask failed detection or browser E2E
+        if: always() && (steps.detect.outcome == 'failure' || steps.vectors.outcome == 'failure' || steps.e2e.outcome == 'failure')
+        shell: bash
+        run: |
+          echo '::error title=Upstream verification failed::A required upstream or CSV round-trip check failed; no master can be promoted. See audit evidence artifact.'
+          exit 1
   publish:
     needs: audit
     if: always()
