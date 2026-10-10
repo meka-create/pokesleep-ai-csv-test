@@ -14,7 +14,7 @@ def git(repo,*args):
 def guard(repo,commit):
     if not re.fullmatch('[0-9a-f]{40}',commit):raise ValueError('Invalid commit')
     if git(repo,'rev-parse','HEAD')!=commit:raise ValueError('HEAD changed - no rollback')
-    remote=dict(line.split('\t') for line in git(repo,'ls-remote','origin','refs/heads/main').splitlines()).get('refs/heads/main')
+    remote=dict((ref,sha) for sha,ref in (line.split('\t',1) for line in git(repo,'ls-remote','origin','refs/heads/main').splitlines())).get('refs/heads/main')
     if remote!=commit:raise ValueError('Remote HEAD changed - no rollback')
     if git(repo,'status','--porcelain','--untracked-files=no')!='':raise ValueError('Dirty working tree - no rollback')
     changed=set(git(repo,'diff-tree','--no-commit-id','--name-only','-r','HEAD').splitlines())
@@ -29,7 +29,8 @@ def main():
     a=p.parse_args();repo=Path(a.repo)
     try:
         evidence=json.loads(Path(a.confirmed_health_evidence).read_text(encoding='utf-8'))
-        if evidence.get('result')!='MIXED_ASSETS_CONFIRMED' or not evidence.get('checks') or evidence['checks'][-1].get('result')!='MIXED_ASSETS_CONFIRMED':
+        checks=evidence.get('checks')
+        if evidence.get('result')!='MIXED_ASSETS_CONFIRMED' or not isinstance(checks,list) or len(checks)<3 or any(c.get('result')!='MIXED_ASSETS_CONFIRMED' for c in checks[-3:]):
             raise ValueError('No verified mixed-assets failure')
         changed=guard(repo,a.expected_commit)
         subprocess.run(['git','-C',str(repo),'revert','--no-commit',a.expected_commit],check=True)

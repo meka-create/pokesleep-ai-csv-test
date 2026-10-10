@@ -41,6 +41,9 @@ def main():
         if status=='ALL_EXPECTED_ASSETS_LIVE':break
         if n+1<a.attempts:time.sleep(a.delay)
     last=attempts[-1]['result']
+    # CDN transitions can be briefly mixed; require three consecutive observations.
+    if last=='MIXED_ASSETS_CONFIRMED' and (len(attempts)<3 or any(x['result']!='MIXED_ASSETS_CONFIRMED' for x in attempts[-3:])):
+        last='MIXED_ASSETS_NOT_STABLE'
     result={'schema':'pokesleep-pages-health-v1','result':last,'checks':attempts,'productionCsvAllowed':False}
     Path(a.out).parent.mkdir(parents=True,exist_ok=True)
     Path(a.out).write_text(json.dumps(result,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
@@ -48,5 +51,5 @@ def main():
     # 2 is a hard mismatch ONLY after new HTML was served; 3 is stale/pending;
     # 4 is network unverified (do not roll back on mere temporary outages).
     return {'ALL_EXPECTED_ASSETS_LIVE':0,'MIXED_ASSETS_CONFIRMED':2,
-            'STALE_HTML_OR_PENDING_DEPLOYMENT':3,'NETWORK_UNKNOWN':4}[last]
+            'STALE_HTML_OR_PENDING_DEPLOYMENT':3,'MIXED_ASSETS_NOT_STABLE':3,'NETWORK_UNKNOWN':4}[last]
 if __name__=='__main__':raise SystemExit(main())
