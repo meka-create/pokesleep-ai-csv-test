@@ -1,0 +1,40 @@
+name: PokeSleep isolated final Pages & rollback verification (HOLD)
+on:
+  push:
+    branches:
+      - validation/r6-final-pages-20261010
+permissions:
+  contents: read
+jobs:
+  safety-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Unit and guarded recovery tests
+        run: |
+          python -m unittest discover -s tests -p 'test_auto_watch.py' -v
+          python -m unittest discover -s tests -p 'test_verified_auto_promotion.py' -v
+          python -m unittest discover -s tests -p 'test_release_health.py' -v
+      - name: LIVE read-only GitHub Pages check
+        shell: bash
+        run: |
+          python scripts/verify_pages_live.py --site . \
+            --url 'https://meka-create.github.io/pokesleep-ai-csv-test/' \
+            --commit "$GITHUB_SHA" --attempts 2 --delay 3 \
+            --out pages_health.json
+      - name: Preserve actual Pages evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-pages-preflight-HOLD
+          path: pages_health.json
+          retention-days: 7
+          if-no-files-found: warn
