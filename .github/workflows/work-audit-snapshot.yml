@@ -1,0 +1,32 @@
+name: Work audit exact main snapshot (READ-ONLY / HOLD)
+on:
+  push:
+    branches:
+      - validation/work-audit-snapshot-20261010
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 162642e324b765d7446588d13058c6fad46f3e31
+          persist-credentials: false
+      - name: Archive tracked source from exact main commit, with no screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output work-audit-main-source-r6.4.zip 162642e324b765d7446588d13058c6fad46f3e31
+          unzip -Z1 work-audit-main-source-r6.4.zip | grep -E '\\.(png|jpg|jpeg|webp)$' && { echo "Image must not be packaged"; exit 2; } || true
+          echo "SHA=162642e324b765d7446588d13058c6fad46f3e31" > SNAPSHOT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pokesleep-work-audit-exact-main-r6-4
+          path: |
+            work-audit-main-source-r6.4.zip
+            SNAPSHOT.txt
+          retention-days: 7
