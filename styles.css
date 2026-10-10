@@ -40,3 +40,57 @@ body{background:radial-gradient(ellipse 75% 40% at 53% -10%,rgba(100,149,236,.15
 
 /* Offline-friendly fallback for the reference TIPS screenshot. */
 .tips-image-fallback{margin:3px 0 0;padding:22px 14px;border-radius:10px;background:#eef3fc;color:#687c9c;text-align:center;font-size:12px;line-height:1.75}
+
+/* Reference-blue restoration (from supplied mid-audit design). Functionality and step flows unchanged. */
+:root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;color:#14263b;background:#f6f8fb;--navy:#14263b;--dark:#14263b;--teal:#2f6ce8;--teal-deep:#2d65d3;--mint:#eaf1ff;--muted:#778493;--line:#e3eaf3;--shadow:0 5px 22px rgba(27,59,104,.045)}
+body{background:#f6f8fb}
+.page{max-width:960px;padding:0 22px}
+.masthead{min-height:78px;border-bottom:1px solid #e1e7ef}
+.brand{color:#14263b}
+.brand-mark{box-shadow:0 4px 10px rgba(47,108,232,.10)}
+main{padding-top:34px}
+.panel{border:1px solid #e3eaf3;border-radius:20px;padding:28px;margin-bottom:22px;box-shadow:var(--shadow)}
+.section-heading{gap:16px;margin-bottom:22px}
+.section-heading h1,.section-heading h2{font-size:20px;letter-spacing:-.025em}
+.stepnum{width:37px;height:37px;flex-basis:37px;font-size:13px;border-radius:11px;background:#eaf1ff;color:#356ada}
+.stepnum.done{color:#168265;background:#def8e9}
+.dropzone{min-height:178px;border:2px dashed #abc4eb;border-radius:16px;background:#f8fbff;gap:10px;transform:none}
+.dropzone:hover,.dropzone.dragover{border-color:#286bdd;background:#f0f6ff;transform:none}
+.dropzone .upload-icon{width:56px;height:56px;border-radius:18px;background:#e7efff;color:#356ada}
+.dropzone strong{color:#14263b}
+.drop-hint{font-size:12px;color:#6c7c8c;letter-spacing:0}
+.privacy{font-size:12px;color:#778493}
+.selection-head strong{font-size:17px}
+.text-btn{color:#2d65d3;font-size:13px}
+.primary{min-height:55px;border-radius:12px;background:#2f6ce8;box-shadow:none;font-weight:800;letter-spacing:0}
+.primary:disabled{background:#bac8de;color:#fff;box-shadow:none}
+.primary:not(:disabled):hover{background:#2a62d9;box-shadow:none;transform:none}
+.zip-progress-track>div{background:#2f6ce8}
+.download-row{border-color:#e3eaf3;background:#f9fbff;border-radius:12px;padding:15px}
+.doc-icon{background:#e5eeff;color:#376dda}
+.secondary{color:#3068da;border-color:#b9ceec;border-radius:9px}
+.prompt{background:#f7f9fc;border-color:#dbe4f0;box-shadow:none}
+.prompt-head{background:#eaf1ff}
+.prompt-label{color:#2d65d3}
+.copy-icon{color:#2d65d3}
+.handoff-index{background:#eaf1ff;color:#356ada}
+.handoff .prompt{background:#f7f9fc;border-color:#dbe4f0;box-shadow:none}
+.handoff .prompt-head{background:#eaf1ff}
+.handoff .final-step{background:#f8fbff;border-color:#e3eaf3}
+.handoff .final-step .handoff-index{background:#eaf1ff}
+.ai-choice{border:1px solid #dbe4f0;border-radius:14px;padding:15px;gap:14px;color:#14263b}
+.ai-choice:hover,.handoff .ai-choice:hover{border-color:#87aaf0;background:#f9fbff}
+.ai-logo{display:grid;place-items:center;width:42px;height:42px;flex:0 0 42px;border:1px solid #e0e5ec;background:#fff;border-radius:12px;color:#101010}
+.ai-logo svg{display:block;width:29px;height:29px;fill:currentColor}
+.ai-choice strong{font-size:18px;line-height:1.3;font-weight:800}
+.arrow{font-size:20px;color:#4e83cf}
+.info-copy a{color:#2d65d3}
+.watch-actions button{background:#3068db}
+/* Match the frozen OCR application's TOP RIGHT control geometry; no question-mark icon. */
+.masthead-actions{gap:7px}
+.masthead-actions .tips-btn{min-width:52px;width:auto;height:31px;padding:0 11px;border:1px solid #d9dcf8;border-radius:999px;background:#f5f5ff;color:#4d50c9;box-shadow:none;font-size:11px;font-weight:900;letter-spacing:.05em;line-height:29px}
+.masthead-actions .tips-btn:hover{background:#eceeff;border-color:#bfc3f3}
+.masthead-actions .more-btn{display:grid;place-items:center;min-width:31px;width:31px;height:31px;padding:0;border:1px solid #e0e3eb;border-radius:999px;background:#fff;color:#697386;box-shadow:none;font-size:20px;font-weight:900;line-height:1}
+.masthead-actions .more-btn:hover,.masthead-actions .more-btn[aria-expanded="true"]{background:#f1f2f7;border-color:#cfd3df;color:#444c5d}
+.more-menu{top:38px;border-color:#e1e4ec;border-radius:13px;box-shadow:0 16px 42px rgba(28,35,58,.16)}
+@media(max-width:620px){.page{padding:0 14px}.masthead{min-height:66px}.panel{padding:20px;border-radius:15px;margin-bottom:16px}.section-heading h1,.section-heading h2{font-size:18px}.stepnum{width:33px;height:33px;flex-basis:33px}.masthead-actions .tips-btn{height:31px;min-width:52px;padding:0 11px;font-size:11px;border-radius:999px}.masthead-actions .more-btn{width:31px;min-width:31px;height:31px;border-radius:999px}.ai-choice strong{font-size:18px}}
