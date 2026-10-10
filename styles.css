@@ -94,3 +94,7 @@ main{padding-top:34px}
 .masthead-actions .more-btn:hover,.masthead-actions .more-btn[aria-expanded="true"]{background:#f1f2f7;border-color:#cfd3df;color:#444c5d}
 .more-menu{top:38px;border-color:#e1e4ec;border-radius:13px;box-shadow:0 16px 42px rgba(28,35,58,.16)}
 @media(max-width:620px){.page{padding:0 14px}.masthead{min-height:66px}.panel{padding:20px;border-radius:15px;margin-bottom:16px}.section-heading h1,.section-heading h2{font-size:18px}.stepnum{width:33px;height:33px;flex-basis:33px}.masthead-actions .tips-btn{height:31px;min-width:52px;padding:0 11px;font-size:11px;border-radius:999px}.masthead-actions .more-btn{width:31px;min-width:31px;height:31px;border-radius:999px}.ai-choice strong{font-size:18px}}
+
+/* v7: restore frozen old-scan more-menu icon geometry using SVG dots instead of font glyph */
+.masthead-actions .more-btn{font-size:0;line-height:0}
+.masthead-actions .more-btn svg{display:block;stroke:none;fill:currentColor;width:22px;height:22px}
