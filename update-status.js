@@ -6,16 +6,12 @@ const $watch = selector => document.querySelector(selector);
 const watchBadge = $watch('#update-watch-button');
 const watchModal = $watch('#update-watch-dialog');
 const watchState = $watch('#update-watch-state');
-const watchDetails = $watch('#update-watch-details');
-const watchChecked = $watch('#update-watch-checked');
-const watchLink = $watch('#update-watch-run');
 const validStates = new Set(['healthy', 'attention', 'pending']);
-const stateLabels = {
-  healthy: '✓ 更新監視：正常',
-  attention: '⚠️ 更新要確認',
-  pending: '◷ 更新監視：準備中'
-};
-let latestWatch = null;
+const pendingUpdateCodes = new Set([
+  'UPDATE_REQUIRES_VALIDATION', 'IMPORTER_E2E_NOT_VERIFIED',
+  'AUTOMATIC_RELEASE_NOT_VERIFIED', 'AUTOPROMOTION_REJECTED',
+  'UPSTREAM_PREFLIGHT_FAILED'
+]);
 function invalidWatch(message) {
   return {state:'attention',message:'更新状態を確認できません',details:message,
           checkedAt:null,runUrl:null,reasonCode:'STATUS_UNAVAILABLE'};
@@ -38,33 +34,17 @@ function readWatch(data, now = Date.now()) {
     return invalidWatch('定期確認の結果が古いか日時が不正です。GitHub Actionsの実行履歴を確認してください。');
   return data;
 }
-function linkForWatch(raw) {
-  if(typeof raw !== 'string' || raw.length > 250) return null;
-  try {
-    const u = new URL(raw);
-    if(u.origin === 'https://github.com' &&
-       /^\/meka-create\/pokesleep-ai-csv-test\/actions\/runs\/\d+$/.test(u.pathname)) return u.href;
-  } catch (_) { /* ignore invalid source links */ }
-  return null;
-}
 function renderWatch(data) {
-  latestWatch = data;
-  // Keep normal and initial-check states completely silent in the UI.
-  // The status is still checked in the background; only abnormal states alert.
+  // Normal and initial-check states are completely silent.
   watchBadge.dataset.state = data.state;
   watchBadge.hidden = data.state !== 'attention';
-  if(watchBadge.hidden && watchModal.open) watchModal.close?.();
-  watchBadge.textContent = stateLabels[data.state];
-  watchBadge.setAttribute('aria-label',stateLabels[data.state]+'。詳細を表示');
-  watchState.textContent = data.message;
-  watchDetails.textContent = data.details;
-  const d = data.checkedAt && Number.isFinite(Date.parse(data.checkedAt)) ?
-    new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(data.checkedAt)) : '未実行／確認不可';
-  watchChecked.textContent = '最終チェック（日本時間）：'+d+' ／ 定期チェック：毎日午前4時';
-  const href = linkForWatch(data.runUrl);
-  watchLink.hidden = !href;
-  if(href) watchLink.href=href;
-  else watchLink.removeAttribute('href');
+  if (watchBadge.hidden && watchModal.open) watchModal.close?.();
+  // Never surface upstream diagnostics or repository URLs to end users.
+  watchBadge.textContent = '⚠️';
+  watchBadge.setAttribute('aria-label', 'データ更新のお知らせを表示');
+  watchState.textContent = pendingUpdateCodes.has(data.reasonCode)
+    ? '最新データの更新について確認が必要です。'
+    : 'データの更新状況を確認できませんでした。';
 }
 async function refreshWatch() {
   try {
@@ -81,7 +61,7 @@ watchBadge.addEventListener('click',()=>{
 });
 $watch('#update-watch-close').addEventListener('click',()=>watchModal.close?.());
 watchModal.addEventListener('click',event=>{ if(event.target===watchModal)watchModal.close?.(); });
-$watch('#update-watch-recheck').addEventListener('click',()=>{refreshWatch();watchModal.close?.();});
+$watch('#update-watch-close-bottom').addEventListener('click',()=>watchModal.close?.());
 refreshWatch();
 window.addEventListener('focus',refreshWatch);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshWatch();});
