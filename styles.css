@@ -108,3 +108,5 @@ main{padding-top:34px}
 .brandname{font-size:22px;font-weight:900;letter-spacing:-.055em}
 .brandsub{font-size:11px;font-weight:750;letter-spacing:.045em}
 @media(max-width:620px){.brandname{font-size:17px}.brandsub{font-size:10px}}
+/* v11: Match the frozen 個体値ぶっこみスキャン title font and tracking. Keep v10 size/weight. */
+.brandname{font-family:Inter,"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,-apple-system,sans-serif;letter-spacing:-.035em}
