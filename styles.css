@@ -2,7 +2,7 @@
 
 /* Update indicator: abnormal only, icon-only, with accessible label. */
 .masthead-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
-#update-watch-button{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;min-width:42px;padding:0;border:1px solid #e5a93b;background:#fff1d6;border-radius:50%;font-size:21px;line-height:1;cursor:pointer}
+#update-watch-button{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;min-width:42px;padding:0;border:0;background:transparent;border-radius:0;box-shadow:none;appearance:none;font-size:21px;line-height:1;cursor:pointer}
 #update-watch-button[hidden]{display:none!important}
 #update-watch-dialog{max-width:min(92vw,440px);border:1px solid #d5dfe9;border-radius:18px;padding:24px;box-shadow:0 15px 50px #172f4b45;color:#14263b;line-height:1.75}
 #update-watch-dialog::backdrop{background:#10233c90}
