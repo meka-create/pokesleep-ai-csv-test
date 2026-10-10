@@ -24,7 +24,7 @@ body{background:radial-gradient(ellipse 75% 40% at 53% -10%,rgba(100,149,236,.15
 .handoff .prompt-text{color:#344969}
 .handoff .ai-choice{border-color:#dce6f6}
 .handoff .ai-choice:hover{background:#f6f9ff;border-color:#b5c9ef}
-.handoff .final-step{margin-bottom:0;background:#f3f7ff;border:1px solid #e2eafb;padding:12px 14px;border-radius:13px;align-items:flex-start}
+.handoff .final-step{margin-bottom:0;background:#f3f7ff;border:1px solid #e2eafb;padding:12px 14px;border-radius:13px;align-items:center;flex-wrap:nowrap}
 .handoff .final-step .handoff-index{background:#dfeaff}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .zip-progress-track>div{background:linear-gradient(90deg,#5d93ee,#2865ce)}
