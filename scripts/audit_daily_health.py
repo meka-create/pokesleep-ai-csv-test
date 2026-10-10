@@ -2,7 +2,8 @@
 """Read-only daily post-publish watchdog; never promote, revert, or toggle HOLD."""
 from __future__ import annotations
 import argparse
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
+from zoneinfo import ZoneInfo
 import hashlib,json,os,re,subprocess,sys,time
 from pathlib import Path
 from urllib.request import Request,urlopen
@@ -12,6 +13,25 @@ from verify_pages_live import classify,get
 REPO='meka-create/pokesleep-ai-csv-test'
 RUNS_URL=f'https://api.github.com/repos/{REPO}/actions/runs?per_page=100'
 PUBLIC_URL='https://meka-create.github.io/pokesleep-ai-csv-test/'
+JST=ZoneInfo('Asia/Tokyo')
+SCHEDULED_WATCH_HOUR_JST=4
+DELAY_CODES=frozenset(('SCHEDULED_JST_DAY_STATUS_MISSING',
+                        'SCHEDULED_JST_DAY_RUN_MISSING',
+                        'SCHEDULED_JST_DAY_RUN_IN_PROGRESS'))
+
+def scheduled_jst_day(now):
+    """Select the last due 04:00 JST cycle, even across UTC/date boundaries."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError('now must be timezone-aware')
+    local=now.astimezone(JST)
+    return local.date() if local.hour >= SCHEDULED_WATCH_HOUR_JST else local.date()-timedelta(days=1)
+
+def parsed_time(value):
+    if not isinstance(value,str):raise ValueError('timestamp is not a string')
+    dt=datetime.fromisoformat(value.replace('Z','+00:00'))
+    if dt.tzinfo is None or dt.utcoffset() is None:raise ValueError('timestamp lacks timezone')
+    return dt
+
 ALLOWED=frozenset(('app.js','index.html','update-status.json',
                    'kit-assets/MASTER_DATA.json','kit-assets/KIT_VERSION.json'))
 SUCCESS_REASONS=frozenset(('NO_CHANGE','AUTO_PROMOTION_COMMITTED_PENDING_PUSH',
@@ -44,9 +64,11 @@ def check_local(site,now,problems,*,max_age_hours=34):
     require(status.get('state')=='healthy' and
             status.get('reasonCode') in SUCCESS_REASONS,'UPSTREAM_WATCH_REQUIRES_ATTENTION',problems)
     try:
-        checked=datetime.fromisoformat(status['checkedAt'].replace('Z','+00:00'))
+        checked=parsed_time(status['checkedAt'])
         age=(now-checked).total_seconds()/3600
         require(-.25<=age<=max_age_hours,'UPSTREAM_WATCH_STALE_OR_FUTURE',problems)
+        require(checked.astimezone(JST).date()==scheduled_jst_day(now),
+                'SCHEDULED_JST_DAY_STATUS_MISSING',problems)
     except (ValueError,KeyError,TypeError,AttributeError):
         age=None
         require(False,'UPSTREAM_WATCH_TIMESTAMP_INVALID',problems)
@@ -95,19 +117,39 @@ def check_local(site,now,problems,*,max_age_hours=34):
             'sourceCommit':source,'watchReason':status.get('reasonCode'),
             'checkedAgeHours':age}
 
-def check_github_run(data,status,problems):
-    candidates=[r for r in data.get('workflow_runs',[])
-                if r.get('event') in ('schedule','workflow_dispatch') and
+def check_github_run(data,status,problems,*,now):
+    if not isinstance(data,dict) or not isinstance(data.get('workflow_runs'),list):
+        require(False,'GITHUB_WATCH_RUN_LIST_INVALID',problems)
+        return {}
+    candidates=[r for r in data['workflow_runs'] if isinstance(r,dict)
+                and r.get('event') in ('schedule','workflow_dispatch') and
                 (r.get('path')=='.github/workflows/upstream-watch.yml' or
                  r.get('name')=='Pokemon Sleep automated verified upstream master (PROTOTYPE HOLD)')]
     if not require(bool(candidates),'GITHUB_WATCH_RUN_NOT_FOUND',problems):return {}
+    # The GitHub API is normally newest-first, but do not silently depend on it.
+    candidates.sort(key=lambda r:str(r.get('created_at') or ''),reverse=True)
+    due=scheduled_jst_day(now)
     latest=candidates[0]
     require(latest.get('head_branch')=='main','GITHUB_WATCH_NOT_ON_MAIN',problems)
-    require(latest.get('status')=='completed' and latest.get('conclusion')=='success',
-            'GITHUB_WATCH_LATEST_NOT_SUCCESS',problems)
-    expected=f'https://github.com/{REPO}/actions/runs/{latest.get("id")}'
-    require(status.get('runUrl')==expected,'STATUS_LATEST_RUN_NOT_MATCHED',problems)
-    return {'id':latest.get('id'),'conclusion':latest.get('conclusion'),'event':latest.get('event')}
+    try:
+        created=parsed_time(latest.get('created_at'))
+        run_day=created.astimezone(JST).date()
+        require(run_day==due,'SCHEDULED_JST_DAY_RUN_MISSING',problems)
+    except (ValueError,TypeError,OverflowError):
+        run_day=None
+        require(False,'GITHUB_WATCH_CREATED_AT_INVALID',problems)
+    if run_day==due:
+        if latest.get('status')!='completed':
+            require(False,'SCHEDULED_JST_DAY_RUN_IN_PROGRESS',problems)
+        elif latest.get('conclusion')!='success':
+            require(False,'GITHUB_WATCH_LATEST_NOT_SUCCESS',problems)
+        else:
+            expected=f'https://github.com/{REPO}/actions/runs/{latest.get("id")}'
+            require(status.get('runUrl')==expected,'STATUS_LATEST_RUN_NOT_MATCHED',problems)
+    return {'id':latest.get('id'),'conclusion':latest.get('conclusion'),
+            'status':latest.get('status'),'event':latest.get('event'),
+            'runJstDate':run_day.isoformat() if run_day else None,
+            'requiredJstDate':due.isoformat()}
 
 def check_git_history(site,problems,limit=30):
     try:
@@ -159,7 +201,8 @@ def execute(site,*,now=None,runs=None,check_public_files=True,max_age_hours=34,
     site=Path(site);now=now or datetime.now(timezone.utc)
     problems=[]
     report={'schemaVersion':'pokesleep-postpublish-audit-v1',
-            'checkedAt':now.isoformat(),'readOnly':True,
+            'checkedAt':now.isoformat(),'requiredJstDate':scheduled_jst_day(now).isoformat(),
+            'readOnly':True,
             'productionCsvAllowed':False,'problems':problems}
     try:
         report['local']=check_local(site,now,problems,max_age_hours=max_age_hours)
@@ -170,7 +213,7 @@ def execute(site,*,now=None,runs=None,check_public_files=True,max_age_hours=34,
     report['history']=check_git_history(site,problems)
     try:
         data=runs if runs is not None else github_json(RUNS_URL,token)
-        report['latestWatchRun']=check_github_run(data,status,problems)
+        report['latestWatchRun']=check_github_run(data,status,problems,now=now)
     except (OSError,ValueError,KeyError,TypeError) as e:
         require(False,'GITHUB_ACTIONS_QUERY_FAILED:'+type(e).__name__,problems)
     if check_public_files:
@@ -179,7 +222,7 @@ def execute(site,*,now=None,runs=None,check_public_files=True,max_age_hours=34,
                 delay=public_delay,classifier=public_classifier,fetcher=public_fetcher)
         except (OSError,ValueError,KeyError,TypeError) as e:
             require(False,'PUBLIC_AUDIT_EXCEPTION:'+type(e).__name__,problems)
-    report['state']='PASS' if not problems else 'ATTENTION'
+    report['state']='PASS' if not problems else ('DELAYED' if set(problems)<=DELAY_CODES else 'ATTENTION')
     return report
 
 def main():
@@ -196,7 +239,8 @@ def main():
     dest=Path(a.report);dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(json.dumps(r,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
     print(json.dumps({'state':r['state'],'problems':r['problems'],
-                      'latestWatchRun':r.get('latestWatchRun')},ensure_ascii=False))
-    return 0 if r['state']=='PASS' else 2
+                      'latestWatchRun':r.get('latestWatchRun'),
+                      'requiredJstDate':r['requiredJstDate']},ensure_ascii=False))
+    return {'PASS':0,'DELAYED':3,'ATTENTION':2}[r['state']]
 
 if __name__=='__main__':raise SystemExit(main())
