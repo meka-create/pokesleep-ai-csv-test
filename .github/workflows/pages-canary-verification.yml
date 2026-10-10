@@ -1,0 +1,76 @@
+name: PokeSleep public Pages canary delivery and removal (HOLD)
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  pages-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Read real Pages and verify temporary canary exists or is removed
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canary_evidence
+          python - <<'PY'
+          from pathlib import Path
+          import urllib.request, urllib.error, hashlib, json, time, os
+          path=Path('qa/deployment-canary.txt')
+          expect=path.read_bytes() if path.is_file() else None
+          checks=[]
+          succeeded=False
+          for i in range(36):
+              url='https://meka-create.github.io/pokesleep-ai-csv-test/qa/deployment-canary.txt?verify='+os.environ['GITHUB_SHA'][:12]+'-'+str(i)
+              try:
+                  request=urllib.request.Request(url,headers={'Cache-Control':'no-cache','Pragma':'no-cache'})
+                  with urllib.request.urlopen(request,timeout=15) as res:
+                      status=res.status;content=res.read()
+              except urllib.error.HTTPError as e:
+                  status=e.code;content=e.read()
+              except Exception as e:
+                  checks.append({'error':type(e).__name__,'ok':False})
+                  if i<35:time.sleep(10)
+                  continue
+              ok=(status==200 and content==expect) if expect is not None else status==404
+              checks.append({'httpStatus':status,'sha256':hashlib.sha256(content).hexdigest(),'ok':ok})
+              if ok:succeeded=True;break
+              if i<35:time.sleep(10)
+          result={'schema':'pokesleep-pages-canary-v1','state':'PASS' if succeeded else 'HOLD',
+                  'expected':'EXACT_PUBLIC_FILE' if expect is not None else 'PUBLIC_404_AFTER_REMOVAL',
+                  'commit':os.environ['GITHUB_SHA'],'checks':checks}
+          Path('canary_evidence/RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps({k:result[k] for k in ('state','expected','commit')}))
+          if not succeeded:raise SystemExit(2)
+          PY
+      - name: Check frozen master remains 249 and production CSV HOLD
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          m=json.loads(Path('kit-assets/MASTER_DATA.json').read_text())
+          v=json.loads(Path('kit-assets/KIT_VERSION.json').read_text())
+          assert len(m['pokemon'])==249
+          assert v['productionCsvAllowed'] is False and v['compatibilityVerified'] is False
+          for name,sha in v['rawAssetSha256'].items():
+              assert hashlib.sha256((Path('kit-assets')/name).read_bytes()).hexdigest()==sha,name
+          print('249_SPECIES_AND_HOLD_PASS')
+          PY
+      - name: Preserve independent public proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-final-canary-HOLD
+          path: canary_evidence/
+          retention-days: 14
+          if-no-files-found: warn
