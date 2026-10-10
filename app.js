@@ -1,4 +1,4 @@
-import { makeZip } from './zip-store.js';
+import { makeZip } from './zip-store.js?v=20261010-auditfix-r2';
 
 const KIT_FILES = [
   'START_HERE.md', 'AI_INSTRUCTIONS.md', 'READING_RULES.md',
@@ -8,6 +8,12 @@ const KIT_FILES = [
   'SPECIES_AUDIT_GUIDE.md', 'SPECIES_AUDIT.py', 'species_evidence_lab.py',
   'numeric_observer.py', 'SPECIES_OBSERVATIONS_TEMPLATE.json'
 ];
+// The KIT_VERSION.json raw SHA-256 is pinned in this versioned script.
+// KIT_VERSION.json pins the other 15 files; self-hashing inside JSON is impossible.
+// Any old/mixed/corrupt kit must fail closed BEFORE makeZip/saveZip.
+const SITE_HOTFIX_ID = 'v08c-auditfix-20261010-r2';
+const EXPECTED_KIT_VERSION = '0.12.0-prototype';
+const KIT_VERSION_RAW_SHA256 = '946030c18f5d4d4d399a67129595ad045b031bf0f97f781ec7f5139b1aa94f7e';
 const FILES = new Map();
 let seq = 0, lastZip = null, lastName = '', busy = false, hashing = 0, hashError = false;
 const $ = s => document.querySelector(s);
@@ -26,9 +32,20 @@ function imageMagicMatches(data, filename) {
   if (suffix === 'png') {
     if (data.byteLength < 45) return false;
     const tail = new Uint8Array(data, data.byteLength - 12, 12);
+    // The Validator checks the IHDR CRC; reject corrupted headers at upload time.
+    // CRC covers PNG chunk type + IHDR data (bytes 12 through 28).
+    let crc = 0xffffffff;
+    for (let i = 12; i < 29; i++) {
+      crc = (crc ^ head[i]) >>> 0;
+      for (let bit = 0; bit < 8; bit++)
+        crc = ((crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0)) >>> 0;
+    }
+    const actualCrc = (crc ^ 0xffffffff) >>> 0;
+    const dv = new DataView(data);
     return bytesAt(0, [137,80,78,71,13,10,26,10]) && bytesAt(12, [73,72,68,82])
-      && new DataView(data).getUint32(8, false) === 13
-      && Array.from(tail.slice(0, 8)).join(',') === '0,0,0,0,73,69,78,68';
+      && dv.getUint32(8, false) === 13
+      && dv.getUint32(29, false) === actualCrc
+      && Array.from(tail).join(',') === '0,0,0,0,73,69,78,68,174,66,96,130';
   }
   if (suffix === 'jpg' || suffix === 'jpeg') {
     if (data.byteLength < 20) return false;
@@ -49,6 +66,65 @@ async function digestFile(file) {
     throw new Error(`画像の拡張子と実体が不一致/破損の疑い: ${file.name}`);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(hash)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function hexHash(bytes) {
+  return [...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+async function sha256(bytes) {
+  return hexHash(await crypto.subtle.digest('SHA-256', bytes));
+}
+function requireExactNames(actual, expected, label) {
+  if (actual.length !== expected.length ||
+      new Set(actual).size !== expected.length ||
+      expected.some(name => !actual.includes(name))) {
+    throw new Error(`${label}の構成が新旧混在または欠落しています（必要: ${expected.length}件）`);
+  }
+}
+async function verifiedKitAssets() {
+  requireExactNames(KIT_FILES, [
+    'START_HERE.md', 'AI_INSTRUCTIONS.md', 'READING_RULES.md',
+    'PROGRESS_PROTOCOL.md', 'MASTER_DATA.json', 'CSV_SCHEMA.json',
+    'KIT_VERSION.json', 'VALIDATOR.py', 'PROTOTYPE_EXPORT_GATE.py',
+    'RELEASE_EXPORT_GATE.py', 'RECORDS_TEMPLATE.json',
+    'SPECIES_AUDIT_GUIDE.md', 'SPECIES_AUDIT.py', 'species_evidence_lab.py',
+    'numeric_observer.py', 'SPECIES_OBSERVATIONS_TEMPLATE.json'
+  ], 'ZIP同梱キット');
+  const kitData=[];
+  for (const name of KIT_FILES) {
+    const resp=await fetch(new URL('./kit-assets/'+name,import.meta.url),{
+      cache:'no-store', redirect:'error'
+    });
+    if(!resp.ok)throw new Error(`必要ファイルの取得に失敗: ${name} (${resp.status})`);
+    kitData.push({name,bytes:new Uint8Array(await resp.arrayBuffer())});
+  }
+  const byName = new Map(kitData.map(item=>[item.name,item.bytes]));
+  requireExactNames([...byName.keys()], KIT_FILES, '取得済みキット');
+  const versionBytes=byName.get('KIT_VERSION.json');
+  if (await sha256(versionBytes) !== KIT_VERSION_RAW_SHA256) {
+    throw new Error('KIT_VERSION.json の生バイトSHA-256が不一致です。キャッシュや資産混在を検出したためZIP作成を拒否しました。');
+  }
+  let version;
+  try { version=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(versionBytes)); }
+  catch { throw new Error('KIT_VERSION.json の解析に失敗しました'); }
+  if(version.siteHotfixId!==SITE_HOTFIX_ID || version.kitVersion!==EXPECTED_KIT_VERSION ||
+     version.rawAssetHashFormat!=='sha256-raw-file-bytes' ||
+     version.productionCsvAllowed!==false || version.compatibilityVerified!==false ||
+     !String(version.status).includes('HOLD')) {
+    throw new Error('キットの版、整合性仕様またはPROTOTYPE/HOLD状態が一致しません');
+  }
+  const required=KIT_FILES.filter(name=>name!=='KIT_VERSION.json');
+  const hashes=version.rawAssetSha256;
+  if(!hashes || typeof hashes!=='object' || Array.isArray(hashes))
+    throw new Error('生バイトハッシュ一覧がありません');
+  requireExactNames(Object.keys(hashes),required,'SHA-256一覧');
+  for (const name of required) {
+    const expected=hashes[name];
+    if(typeof expected!=='string'||!/^[0-9a-f]{64}$/.test(expected)||
+       await sha256(byName.get(name)) !== expected) {
+      throw new Error(`${name} の生バイトSHA-256が不一致です。ZIPを作成しません。`);
+    }
+  }
+  return {kitData,version};
 }
 function totals() { return [...FILES.values()].reduce((s,r)=>s+r.file.size,0); }
 function updateDuplicate() {
@@ -119,7 +195,7 @@ async function build() {
   if(!crypto?.subtle){announce('SHA-256計算にはHTTPSまたはlocalhostが必要です。',true);return;}
   const bytes=totals();
   if(bytes>MAX_ARCHIVE_BYTES){announce(`現在の試作版はブラウザのメモリ保護のため合計${fmt(MAX_ARCHIVE_BYTES)}までです。正式なAI推奨上限は実測後に決定します。`,true);return;}
-  setBusy(true);ready.hidden=true;announce('画像を検証しています…');
+  setBusy(true);ready.hidden=true;lastZip=null;lastName='';announce('画像を検証しています…');
   try {
     if([...FILES.values()].some(row=>!row.hash)) throw new Error('画像ハッシュが未検証です');
     const chosen=[];const seen=new Set();
@@ -136,17 +212,13 @@ async function build() {
       const imageId='IMG-'+String(i+1).padStart(4,'0');
       const path=`images/${imageId}.${ext}`;
       const binary=new Uint8Array(await row.file.arrayBuffer());
+      if(await sha256(binary) !== row.hash || !imageMagicMatches(binary.buffer, row.file.name))
+        throw new Error(`画像の再読込時に内容が変化しました: ${row.file.name}`);
       archiveEntries.push({name:path,bytes:binary});
       manifest.push({id:imageId,path,originalFilename:row.file.name,size:binary.length,sha256:row.hash});
     }
-    const kitData=[];
-    for(const name of KIT_FILES) {
-      const resp=await fetch('./kit-assets/'+name,{cache:'no-store'});
-      if(!resp.ok)throw new Error(`必要ファイルの取得に失敗: ${name} (${resp.status})`);
-      kitData.push({name,bytes:new Uint8Array(await resp.arrayBuffer())});
-    }
-    const version=JSON.parse(new TextDecoder().decode(kitData.find(x=>x.name==='KIT_VERSION.json').bytes));
-    if(typeof version.kitVersion!=='string'||!('productionCsvAllowed' in version)) throw new Error('キットのバージョン定義が無効です');
+    announce('キット16ファイルの生バイトSHA-256を検証しています…');
+    const {kitData,version}=await verifiedKitAssets();
     const doc={schemaVersion:'ai-input-manifest-v0.1',kitVersion:version.kitVersion,images:manifest,inputImageCount:chosen.length,
       sourceSelectedCount:FILES.size,duplicatePolicy:dedupe?'user-selected-remove-exact':'user-selected-keep-all'};
     archiveEntries.push(...kitData,{name:'INPUT_MANIFEST.json',bytes:new TextEncoder().encode(JSON.stringify(doc,null,2)+'\n')});

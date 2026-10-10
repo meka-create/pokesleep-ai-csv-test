@@ -1,0 +1,286 @@
+name: Pokemon Sleep automated verified upstream master (PROTOTYPE HOLD)
+on:
+  schedule:
+    # 04:00 JST = 19:00 UTC previous day; scheduled jobs may start late.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+concurrency:
+  group: pokesleep-upstream-monitor-status-and-promotion
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install real browser probe
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Clone upstream read-only at exactly one commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/nitoyon/pokesleep-tool.git "$RUNNER_TEMP/upstream"
+          git -C "$RUNNER_TEMP/upstream" rev-parse HEAD
+      - name: Select public kit layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f kit-assets/MASTER_DATA.json; then
+            echo 'KIT_DIR=kit-assets' >> "$GITHUB_ENV"
+          elif test -f site/kit-assets/MASTER_DATA.json; then
+            echo 'KIT_DIR=site/kit-assets' >> "$GITHUB_ENV"
+          else
+            echo 'No active master' >&2; exit 2
+          fi
+      - name: Trusted local unit regression and syntax
+        run: |
+          python -m py_compile scripts/daily_watch.py scripts/sync_upstream.py scripts/import_compat_gate.py scripts/publish_watch_status.py scripts/build_auto_vectors.py scripts/run_pinned_import_e2e.py scripts/verified_auto_promotion.py scripts/publish_auto_result.py
+          python -m unittest discover -s tests -p 'test_auto_watch.py' -v
+          python -m unittest discover -s tests -p 'test_upstream_sync.py' -v
+          python -m unittest discover -s tests -p 'test_import_compat_gate.py' -v
+          python -m unittest discover -s tests -p 'test_verified_auto_promotion.py' -v
+      - name: Detect changes; stage candidate, never write active master
+        id: detect
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/daily_watch.py --upstream "$RUNNER_TEMP/upstream" --kit-dir "$KIT_DIR" --out upstream_staging
+          if test -f upstream_staging/UPSTREAM_DIFF.json; then
+            python - <<'PY'
+          import json
+          d=json.load(open('upstream_staging/UPSTREAM_DIFF.json'))
+          fields=('addedSpecies','removedSpecies','changedSpecies','newIngredientKeys','removedIngredientKeys','changedIngredientTranslations','newSubskillKeys','removedSubskillKeys','changedSubskillTranslations','newNatureKeys','removedNatureKeys','changedNatureTranslations')
+          import os
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('changed='+('true' if any(d.get(x) for x in fields) else 'false')+'\n')
+          PY
+          fi
+      - name: Generate candidate-bound REAL importer test vectors
+        if: steps.detect.outcome == 'success' && steps.detect.outputs.changed == 'true'
+        id: vectors
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_auto_vectors.py \
+            --master upstream_staging/MASTER_DATA.candidate.json \
+            --diff upstream_staging/UPSTREAM_DIFF.json \
+            --csv upstream_staging/AUTO_VECTORS.csv \
+            --coverage upstream_staging/VECTOR_COVERAGE.json
+      - name: REAL CSV import and export using pinned locally built upstream UI
+        id: e2e
+        if: steps.vectors.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/run_pinned_import_e2e.py \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --candidate upstream_staging/MASTER_DATA.candidate.json \
+            --diff upstream_staging/UPSTREAM_DIFF.json \
+            --schema "$KIT_DIR/CSV_SCHEMA.json" \
+            --validator "$KIT_DIR/VALIDATOR.py" \
+            --preflight upstream_staging/preflight/UPSTREAM_PREFLIGHT.json \
+            --vector upstream_staging/AUTO_VECTORS.csv \
+            --coverage upstream_staging/VECTOR_COVERAGE.json \
+            --out upstream_staging/e2e \
+            --run-id "${{ github.run_id }}" \
+            --base-sha "${{ github.sha }}"
+      - name: Package strictly same-run promotion evidence
+        if: steps.e2e.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p promotion_input/upstream_source/src/data promotion_input/upstream_source/src/i18n/ja
+          cp upstream_staging/MASTER_DATA.candidate.json promotion_input/
+          cp upstream_staging/UPSTREAM_DIFF.json promotion_input/
+          cp upstream_staging/AUTO_VECTORS.csv promotion_input/
+          cp upstream_staging/VECTOR_COVERAGE.json promotion_input/
+          cp upstream_staging/preflight/UPSTREAM_PREFLIGHT.json promotion_input/
+          cp upstream_staging/e2e/PROMOTION_PROOF.json promotion_input/
+          cp upstream_staging/e2e/browser/PROBE_RESULT.json promotion_input/
+          cp upstream_staging/e2e/browser/roundtrip_export.csv promotion_input/
+          cp upstream_staging/e2e/live/PROBE_RESULT.json promotion_input/LIVE_PROBE_RESULT.json
+          cp upstream_staging/e2e/live/roundtrip_export.csv promotion_input/live_roundtrip_export.csv
+          cp "$RUNNER_TEMP/upstream/src/data/pokemon.json" promotion_input/upstream_source/src/data/
+          cp "$RUNNER_TEMP/upstream/src/i18n/ja/"{pokemons,data,skills}.json promotion_input/upstream_source/src/i18n/ja/
+      - name: Preserve audit and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-auto-audit-evidence-HOLD
+          path: upstream_staging/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Upload public-safe status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-auto-public-status
+          path: upstream_staging/update-status.json
+          retention-days: 2
+          if-no-files-found: warn
+      - name: Upload promotion proof only after real browser success
+        if: steps.e2e.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-promotion-bundle-HOLD
+          path: promotion_input/
+          retention-days: 2
+          if-no-files-found: error
+  publish:
+    needs: audit
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout current trusted default branch (no untrusted code in privileged job)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Lock base HEAD to audit's version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}" || { echo 'BASE_CHANGED_FAIL_CLOSED' >&2; exit 2; }
+      - name: Download status for this workflow run
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: upstream-auto-public-status
+          path: status_input
+      - name: Download real E2E evidence for this workflow run
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: upstream-promotion-bundle-HOLD
+          path: promotion_input
+      - name: Refetch immutable upstream SHA WITHOUT running any upstream code
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pinned_source"
+          if test -f promotion_input/PROMOTION_PROOF.json; then
+            COMMIT="$(python - <<'PY'
+          import json,re
+          s=json.load(open('promotion_input/PROMOTION_PROOF.json'))['sourceCommit']
+          if not re.fullmatch('[a-f0-9]{40}',s):raise SystemExit(2)
+          print(s)
+          PY
+            )"
+            git clone --filter=blob:none --no-checkout https://github.com/nitoyon/pokesleep-tool.git "$RUNNER_TEMP/pinned_source"
+            git -C "$RUNNER_TEMP/pinned_source" fetch --depth 1 origin "$COMMIT"
+            git -C "$RUNNER_TEMP/pinned_source" checkout --detach "$COMMIT"
+          fi
+      - name: Trust-bound verification and local atomic staging (never lift CSV HOLD)
+        shell: bash
+        env:
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          RUN_ID: ${{ github.run_id }}
+          BASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/publish_auto_result.py \
+            --site . --bundle promotion_input \
+            --upstream "$RUNNER_TEMP/pinned_source" \
+            --audit-status status_input/update-status.json \
+            --audit-result "$AUDIT_RESULT" --run-id "$RUN_ID" --base-sha "$BASE_SHA"
+          python - <<'PY'
+          import json,hashlib,pathlib,re
+          root=pathlib.Path('kit-assets');v=json.loads((root/'KIT_VERSION.json').read_text())
+          assert v['productionCsvAllowed'] is False and v['compatibilityVerified'] is False and 'HOLD' in v['status']
+          assert hashlib.sha256((root/'MASTER_DATA.json').read_bytes()).hexdigest()==v['rawAssetSha256']['MASTER_DATA.json']
+          assert hashlib.sha256(json.dumps(json.loads((root/'MASTER_DATA.json').read_text()),ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()==v['assetSha256']['MASTER_DATA.json']
+          for name,sha in v['rawAssetSha256'].items():
+              assert hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+          app=pathlib.Path('app.js').read_text()
+          assert re.search(r"KIT_VERSION_RAW_SHA256 = '"+hashlib.sha256((root/'KIT_VERSION.json').read_bytes()).hexdigest()+"'",app)
+          assert v['siteHotfixId'] in app
+          PY
+          node --check app.js
+      - name: Atomic Git commit (only status + verified kit/app pins)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- update-status.json app.js index.html kit-assets/MASTER_DATA.json kit-assets/KIT_VERSION.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'auto: validated upstream master or status (CSV HOLD preserved)'
+          git push origin HEAD:main
+          NEW_SHA="$(git rev-parse HEAD)"
+          REMOTE_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$REMOTE_SHA" != "$NEW_SHA" ]; then
+            echo 'REMOTE_HEAD_UNEXPECTED: branch changed; do not force push.' >&2
+            exit 2
+          fi
+# Critical:
+# - Upstream only runs with read permission in audit.
+# - Publisher independently refetches source and never runs its code.
+# - Real browser E2E absent/fails => no master/app change; show warning.
+# - One Git commit is the deployment transaction; rejected pushes leave old main.
+# - No productionCsvAllowed/compatibilityVerified toggle. No force push.
+# - A later Pages cache propagation check is a separate deployment health check.
+      - name: Check real GitHub Pages propagation; roll back only PROVEN mixed new assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -Fxq kit-assets/MASTER_DATA.json; then
+            echo 'No master promotion in this commit; skip deployment rollback.'
+            exit 0
+          fi
+          NEW_SHA="$(git rev-parse HEAD)"
+          set +e
+          python scripts/verify_pages_live.py \
+            --site . --url https://meka-create.github.io/pokesleep-ai-csv-test/ \
+            --commit "$NEW_SHA" --attempts 8 --delay 40 \
+            --out "$RUNNER_TEMP/PAGES_DEPLOYMENT_HEALTH.json"
+          result=$?
+          set -e
+          if [ "$result" -eq 2 ]; then
+            # Never roll back for mere CDN delay or network uncertainty.
+            python scripts/safe_rollback.py --repo . \
+              --expected-commit "$NEW_SHA" \
+              --confirmed-health-evidence "$RUNNER_TEMP/PAGES_DEPLOYMENT_HEALTH.json"
+            exit 2
+          elif [ "$result" -eq 0 ]; then
+            echo 'The current expected files are publicly served.'
+          else
+            # Fail-closed: public E2E unverified. Report a warning in the UI,
+            # but do NOT incorrectly roll back on stale CDN HTML/outage.
+            python - <<'PY'
+          import json
+          from datetime import datetime,timezone
+          from pathlib import Path
+          p=Path('update-status.json');s=json.loads(p.read_text(encoding='utf-8'))
+          s['state']='attention'
+          s['reasonCode']='PAGES_DEPLOYMENT_UNVERIFIED'
+          s['message']='公開サイトへの更新反映を確認できません'
+          s['details']='GitHub Pagesの反映待ちか通信障害の可能性があります。既存データの互換性・公開状態の確認が必要です。'
+          s['checkedAt']=datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')
+          p.write_text(json.dumps(s,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+            git add -- update-status.json
+            git commit -m 'monitor: public deployment not verified (HOLD)'
+            git push origin HEAD:main
+          fi
+# Network/cache lag is NOT proof of a bad release. It triggers attention,
+# NOT an unsafe automatic revert. Only confirmed new-index/mixed-asset states
+# allow guarded rollback. GitHub push is always non-force.

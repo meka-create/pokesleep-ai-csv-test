@@ -32,7 +32,7 @@
 `KIT_VERSION.json` の `productionCsvAllowed` が `false` の間、通常モードでの本番CSV出力は禁止されています。
 利用者に未検証のCSVを「pokesleep-tool互換」と表示しないでください。
 
-本番運用時の完成品は、互換性を確認できるまで出力不可。**この開発者用Blind30試験**に限り、検証済みの `*_DEVELOPMENT_ONLY_10.csv` を明確に試験結果として提供する。
+本番運用時の完成品は、互換性を確認できるまで出力不可。開発者が明示的に依頼した試験では、`INPUT_MANIFEST.json` の `images` 全件の処遇確定後に、統合ゲートのPASSを条件として `DEVELOPMENT_ONLY_pokesleep_16col.csv`、`DEVELOPMENT_ONLY_ROW_BINDING.json` と検証状態JSONを開発試験の成果物として提供する。枚数固定の旧10枚・Blind30運用は適用しない。
 中間JSONや解析報告ファイルは標準の提出物にしません。元画像の要確認表示および開発試験のCSV提供を妨げない。
 
 「一緒に眠った時間」「色違い」はユーザーへ質問しません。不明なら各0（運用上の代用値）です。

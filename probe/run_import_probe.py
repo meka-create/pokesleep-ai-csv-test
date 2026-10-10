@@ -223,16 +223,25 @@ def read_export_csv(page,out,report):
     report['steps'].append('EXPORT_CAPTURED_FROM_DIALOG_TEXTAREA')
     return dest
 
-def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None):
+def browser_probe(url,out,headless=True,chromium_path=None, *, mock_html=None, input_csv=None):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
-    fixture=out/'probe_input.csv';write_fixture(fixture)
+    fixture=out/'probe_input.csv'
+    if input_csv is None: write_fixture(fixture)
+    else:
+        source=Path(input_csv)
+        if source.resolve()==fixture.resolve(): raise ValueError('Input fixture aliases output fixture')
+        content=source.read_bytes()
+        rows=parse_csv_file(source)
+        if len(rows)<2 or tuple(rows[0]) != HEADER or any(len(row)!=16 for row in rows):
+            raise ValueError('Invalid 16-col test vectors')
+        fixture.write_bytes(content)
     report={'schema':'pokesleep-real-import-probe-v0.8',
             'checkedAt':datetime.now(timezone.utc).isoformat(),
             'targetUrl':url,'status':'HOLD', 'productionCsvAllowed':False,
             'fixtureSha256':sha256(fixture), 'upstreamImporterExecuted':False,
             'importRoundTripExact':False, 'deployedAppChecked':False,
             'reason':'NOT_EXECUTED', 'steps':[], 'uiInventory':[], 'errors':[],
-            'mockOnly':bool(mock_html), 'menuInvestigations':[]}
+            'mockOnly':bool(mock_html), 'menuInvestigations':[], 'inputCsvRowCount':len(parse_csv_file(fixture))-1}
     try:
         with sync_playwright() as p:
             opts={'headless':headless}
@@ -367,7 +376,7 @@ def main():
     parser.add_argument('--site',default='https://nitoyon.github.io/pokesleep-tool/iv/index.ja.html')
     parser.add_argument('--out',default='probe_evidence')
     parser.add_argument('--chromium-path',default=None)
+    parser.add_argument('--input-csv',default=None)
     a=parser.parse_args()
-    return browser_probe(a.site,a.out,chromium_path=a.chromium_path)
+    return browser_probe(a.site,a.out,chromium_path=a.chromium_path,input_csv=a.input_csv)
 if __name__=='__main__': sys.exit(main())
-

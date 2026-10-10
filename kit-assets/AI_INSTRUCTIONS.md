@@ -11,9 +11,9 @@
 - 画像を全件列挙して、`INPUT_MANIFEST.json` の `images` と数・ID・ファイル名を照合する。未読のまま読んだことにしない。
 - 全画像を**実際に視覚的に観察**して各項目を抽出する。ファイル名やマスターだけから読み取ったふりをしない。
 - 画像の読取ができない実行環境なら明示して停止。勝手な値でCSVを作らない。
-- `KIT_VERSION.json` で `productionCsvAllowed=false` の場合、本番CSVを作らず、試作・検証キットであることを説明する。このユーザーの開発者向けBlind30試験では、確認済み全件に対し`--prototype-test`を使った**DEVELOPMENT_ONLY**試験ファイルを実際に生成・リンクで返す。一般ユーザーへの完成CSV納品には流用しない。
+- `KIT_VERSION.json` で `productionCsvAllowed=false` の場合、本番CSVを作らず、試作・検証キットであることを説明する。開発者が明示的に試験を依頼し、`INPUT_MANIFEST.json` の全画像の処遇が確定した場合に限り、統合 `PROTOTYPE_EXPORT_GATE.py --prototype-test` を通して `DEVELOPMENT_ONLY_pokesleep_16col.csv` と `DEVELOPMENT_ONLY_ROW_BINDING.json` および検証状態JSONを実在ファイルで納品する。これは本番互換性の承認ではなく、一般利用者への本番CSV納品には流用しない。
 
-進捗表示は標準ONで `PROGRESS_PROTOCOL.md` の**非中断・自然な区切りで約1分**方式に従う。進捗表示のために解析を分割・停止しない。10枚を自動連続処理する。中間送信の成否は環境依存である。
+進捗表示は標準ONで `PROGRESS_PROTOCOL.md` の**非中断・自然な区切りで約1分**方式に従う。進捗表示のために解析を分割・停止しない。対象枚数は `INPUT_MANIFEST.json` の `images` 配列（`inputImageCount` と一致必須）で決め、全件を中断せずに処理する。中間送信の成否は環境依存である。
 
 ## 画像読取から確定まで
 

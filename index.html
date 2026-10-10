@@ -5,15 +5,24 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <title>ポケスリ AI CSV変換キット</title>
-  <link rel="stylesheet" href="styles.css">
-  <script type="module" src="app.js"></script>
+  <link rel="stylesheet" href="styles.css?v=20261010-autowatch-r4">
+  <script type="module" src="app.js?v=20261010-autowatch-r4"></script>
+  <script type="module" src="update-status.js?v=20261010-autowatch-r4"></script>
 </head>
 <body>
   <div class="page">
     <header class="masthead">
       <div class="brand"><span class="brand-mark">✦</span> POKESLEEP <span class="brand-light">AI KIT</span></div>
-      <a href="https://github.com/nitoyon/pokesleep-tool" target="_blank" rel="noopener noreferrer" class="origin">pokesleep-tool ↗</a>
+      <div class="masthead-actions"><button id="update-watch-button" data-state="pending" hidden type="button" aria-label="更新監視の詳細を表示">◷ 更新監視：確認中</button><a href="https://github.com/nitoyon/pokesleep-tool" target="_blank" rel="noopener noreferrer" class="origin">pokesleep-tool ↗</a></div>
     </header>
+    <dialog id="update-watch-dialog" aria-labelledby="update-watch-title" aria-describedby="update-watch-details">
+      <div class="watch-modal-header"><h2 id="update-watch-title">データ更新の状況</h2><button id="update-watch-close" type="button" aria-label="閉じる">×</button></div>
+      <p id="update-watch-state" class="watch-lead">監視状態を確認しています…</p>
+      <p id="update-watch-details"></p>
+      <p id="update-watch-checked" class="watch-timestamp">毎日午前4時（日本時間）に確認します。</p>
+      <p class="watch-hold-note">更新できない場合も、現在のマスターを勝手に変更しません。開発版CSVのPROTOTYPE / HOLDも維持します。</p>
+      <div class="watch-actions"><a id="update-watch-run" hidden rel="noopener noreferrer" target="_blank">実行ログを見る ↗</a><button type="button" id="update-watch-recheck">状態を再確認</button></div>
+    </dialog>
     <main>
       <div class="intro">
         <span class="eyebrow">SCREENSHOT → AI → CSV</span>

@@ -1,14 +1,33 @@
 {
   "asOf": "2026-10-09",
   "assetSha256": {
-    "MASTER_DATA.json": "13b7d07f31ca75dbc434e9426d37d2ef0ca2fd26f14105d28dcd2117c202a3db",
-    "CSV_SCHEMA.json": "c0f30f5400ef34823c211a95a8a13218f100e10d7a627e0d4536a66332cb5dfe"
+    "CSV_SCHEMA.json": "c0f30f5400ef34823c211a95a8a13218f100e10d7a627e0d4536a66332cb5dfe",
+    "MASTER_DATA.json": "13b7d07f31ca75dbc434e9426d37d2ef0ca2fd26f14105d28dcd2117c202a3db"
   },
   "compatibilityVerified": false,
   "kitVersion": "0.12.0-prototype",
   "licenseNote": "Do not claim affiliation with Pokémon Sleep or pokesleep-tool.",
   "masterVerifiedAgainstLive": false,
   "productionCsvAllowed": false,
+  "rawAssetHashFormat": "sha256-raw-file-bytes",
+  "rawAssetSha256": {
+    "AI_INSTRUCTIONS.md": "5bab836ecff27679cf59de7736c593aca2eea5732e9b058048ab916cffb362e9",
+    "CSV_SCHEMA.json": "6511d300f6b103c52479546788431b2283022c87684877c7b961aa4e5222d288",
+    "MASTER_DATA.json": "d60410ba1f92d80c67ca3ff40bc8aa7a2cd51d4c03fc33f9e99fa83bb8e77a38",
+    "PROGRESS_PROTOCOL.md": "22d739beb955bdb68ea1c93419968cd1be82805ab50ce5cc4906d1f677514f4e",
+    "PROTOTYPE_EXPORT_GATE.py": "ee82d1cc579c923c76f6adf60484a305b0474fbb81d76c4112d2b3df309abcf0",
+    "READING_RULES.md": "fdeae60f2571c3fedd22e211025a5b6efc43f65eddd7b1228a57c4a10212b580",
+    "RECORDS_TEMPLATE.json": "ca80fd2d0866321fca658e8551f07dd722534fe080e8a4b6102d2e514143d070",
+    "RELEASE_EXPORT_GATE.py": "fbc8c9325a8bc2b051b2ac7d9a354980dfe4cd8c2c83ac6e78565beaba42c56c",
+    "SPECIES_AUDIT.py": "e82039dc21ac37ceeb6b10000d025f2e692af39e19e4212dc6e415495a9bd320",
+    "SPECIES_AUDIT_GUIDE.md": "55f0ead41578760f866693320e3f5e7d3a30687c60bbdd40aa48ec8869d45212",
+    "SPECIES_OBSERVATIONS_TEMPLATE.json": "96643de0568bbc9b01333830fbc658123567308988558ee723ecb9bc0acaede6",
+    "START_HERE.md": "acfe5a674f8c6ad2dc2af603110e58f8d01537df075195fb1a94091b60bd8816",
+    "VALIDATOR.py": "173d8c7a9f252e9e12749547be4d666667abb7c5c2a41ec430fa7b7a9261a13d",
+    "numeric_observer.py": "c279999fad4f00cd2b035205c6f10bc9f419bfa55a216841ce942c6ac0da58d1",
+    "species_evidence_lab.py": "bef09eb99064805b462800270fb731168084106e01dbf084a48812474fd48e8f"
+  },
+  "siteHotfixId": "v08c-auditfix-20261010-r2",
   "sourceCommit": null,
   "status": "PROTOTYPE ONLY / HOLD - Toxtricity form+nature mismatch rejected; 249-species fixture roundtrip value PASS, not full importer compatibility",
   "upstream": "https://github.com/nitoyon/pokesleep-tool"
