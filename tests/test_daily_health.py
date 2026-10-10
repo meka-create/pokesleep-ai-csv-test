@@ -180,4 +180,18 @@ class PostpublishAuditTests(unittest.TestCase):
         self.assertEqual('ATTENTION',result['state'],result)
         self.assertIn('CSV_HOLD_BROKEN',result['problems'])
 
+    def test_run_started_before_4am_jst_does_not_count(self):
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T18:59:59Z'
+        r=self.run_audit()
+        self.assertEqual('DELAYED',r['state'],r)
+        self.assertIn('SCHEDULED_JST_DAY_RUN_MISSING',r['problems'])
+
+    def test_checked_at_4am_jst_exactly_counts(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T19:00:00Z'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T19:00:00Z'
+        self.now=datetime(2026,10,9,20,tzinfo=timezone.utc)
+        self.assertEqual('PASS',self.run_audit()['state'])
+
 if __name__=='__main__':unittest.main()

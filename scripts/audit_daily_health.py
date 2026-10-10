@@ -26,6 +26,11 @@ def scheduled_jst_day(now):
     local=now.astimezone(JST)
     return local.date() if local.hour >= SCHEDULED_WATCH_HOUR_JST else local.date()-timedelta(days=1)
 
+def scheduled_cycle_start(now):
+    day=scheduled_jst_day(now)
+    return datetime(day.year,day.month,day.day,SCHEDULED_WATCH_HOUR_JST,
+                    tzinfo=JST)
+
 def parsed_time(value):
     if not isinstance(value,str):raise ValueError('timestamp is not a string')
     dt=datetime.fromisoformat(value.replace('Z','+00:00'))
@@ -67,7 +72,7 @@ def check_local(site,now,problems,*,max_age_hours=34):
         checked=parsed_time(status['checkedAt'])
         age=(now-checked).total_seconds()/3600
         require(-.25<=age<=max_age_hours,'UPSTREAM_WATCH_STALE_OR_FUTURE',problems)
-        require(checked.astimezone(JST).date()==scheduled_jst_day(now),
+        require(checked.astimezone(JST)>=scheduled_cycle_start(now),
                 'SCHEDULED_JST_DAY_STATUS_MISSING',problems)
     except (ValueError,KeyError,TypeError,AttributeError):
         age=None
@@ -134,11 +139,12 @@ def check_github_run(data,status,problems,*,now):
     try:
         created=parsed_time(latest.get('created_at'))
         run_day=created.astimezone(JST).date()
-        require(run_day==due,'SCHEDULED_JST_DAY_RUN_MISSING',problems)
+        require(run_day==due and created.astimezone(JST)>=scheduled_cycle_start(now),
+                'SCHEDULED_JST_DAY_RUN_MISSING',problems)
     except (ValueError,TypeError,OverflowError):
         run_day=None
         require(False,'GITHUB_WATCH_CREATED_AT_INVALID',problems)
-    if run_day==due:
+    if run_day==due and created.astimezone(JST)>=scheduled_cycle_start(now):
         if latest.get('status')!='completed':
             require(False,'SCHEDULED_JST_DAY_RUN_IN_PROGRESS',problems)
         elif latest.get('conclusion')!='success':
