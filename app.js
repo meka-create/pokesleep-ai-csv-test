@@ -23,7 +23,9 @@ const allowed = /\.(png|jpg|jpeg|webp)$/i;
 const MAX_ARCHIVE_BYTES = 300 * 1024 * 1024; // technical browser-memory guard, NOT empirically verified AI capacity
 function fmt(bytes) { return (bytes / 1024 / 1024).toFixed(1) + ' MB'; }
 function announce(msg, error=false) { status.textContent=msg; status.classList.toggle('error',error); }
-function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.textContent=b?'ZIP作成中…':'AI提出用ZIPを作成 ↓'; }
+function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.innerHTML=b?'ZIPを作成しています…':'<span>ZIPを作成する</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg>'; }
+function setZipProgress(p,label){const bar=$('#zip-progress'),fill=$('#zip-progress-fill');if(!bar||!fill)return;bar.hidden=false;fill.style.width=Math.round(Math.max(0,Math.min(100,p)))+'%';$('#zip-progress-label').textContent=label;}
+function hideZipProgress(){const bar=$('#zip-progress');if(bar)bar.hidden=true;}
 function escapeHtml(x) { return x.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function imageMagicMatches(data, filename) {
   const head = new Uint8Array(data, 0, Math.min(data.byteLength, 64));
@@ -110,7 +112,7 @@ async function verifiedKitAssets() {
      version.rawAssetHashFormat!=='sha256-raw-file-bytes' ||
      version.productionCsvAllowed!==false || version.compatibilityVerified!==false ||
      !String(version.status).includes('HOLD')) {
-    throw new Error('キットの版、整合性仕様またはPROTOTYPE/HOLD状態が一致しません');
+    throw new Error('必要ファイルの整合性を確認できません。再読み込みしてください。');
   }
   const required=KIT_FILES.filter(name=>name!=='KIT_VERSION.json');
   const hashes=version.rawAssetSha256;
@@ -194,8 +196,8 @@ async function build() {
   if (!$('#duplicate-area').hidden && !document.querySelector('input[name="duplicate-mode"]:checked')) {announce('完全重複があります。重複画像の扱いを選んでください。',true);return;}
   if(!crypto?.subtle){announce('SHA-256計算にはHTTPSまたはlocalhostが必要です。',true);return;}
   const bytes=totals();
-  if(bytes>MAX_ARCHIVE_BYTES){announce(`現在の試作版はブラウザのメモリ保護のため合計${fmt(MAX_ARCHIVE_BYTES)}までです。正式なAI推奨上限は実測後に決定します。`,true);return;}
-  setBusy(true);ready.hidden=true;lastZip=null;lastName='';announce('画像を検証しています…');
+  if(bytes>MAX_ARCHIVE_BYTES){announce(`合計サイズは${fmt(MAX_ARCHIVE_BYTES)}までです。`,true);return;}
+  setBusy(true);ready.hidden=true;lastZip=null;lastName='';setZipProgress(4,'画像を確認中…');announce('画像を検証しています…');
   try {
     if([...FILES.values()].some(row=>!row.hash)) throw new Error('画像ハッシュが未検証です');
     const chosen=[];const seen=new Set();
@@ -216,26 +218,27 @@ async function build() {
         throw new Error(`画像の再読込時に内容が変化しました: ${row.file.name}`);
       archiveEntries.push({name:path,bytes:binary});
       manifest.push({id:imageId,path,originalFilename:row.file.name,size:binary.length,sha256:row.hash});
+      setZipProgress(5+Math.round((i+1)/chosen.length*65),`${i+1} / ${chosen.length}枚を確認中`);
     }
-    announce('キット16ファイルの生バイトSHA-256を検証しています…');
+    setZipProgress(76,'同梱ファイルを確認中…');announce('ファイルを確認しています…');
     const {kitData,version}=await verifiedKitAssets();
     const doc={schemaVersion:'ai-input-manifest-v0.1',kitVersion:version.kitVersion,images:manifest,inputImageCount:chosen.length,
       sourceSelectedCount:FILES.size,duplicatePolicy:dedupe?'user-selected-remove-exact':'user-selected-keep-all'};
     archiveEntries.push(...kitData,{name:'INPUT_MANIFEST.json',bytes:new TextEncoder().encode(JSON.stringify(doc,null,2)+'\n')});
-    announce('ZIPを作成しています…');
+    setZipProgress(90,'ZIPを作成中…');announce('ZIPを作成しています…');
     lastZip=makeZip(archiveEntries);
-    lastName='PokemonSleep_AI_Kit_'+chosen.length+'images.zip';
+    lastName='AI_Bukkomi_Scan_'+chosen.length+'images.zip';
     $('#archive-name').textContent=lastName;
-    $('#archive-count').textContent=chosen.length+'枚 / '+fmt(lastZip.size)+' / '+version.kitVersion;
+    $('#archive-count').textContent=chosen.length+'枚 / '+fmt(lastZip.size);
     saveZip(lastZip,lastName);
     ready.hidden=false;ready.scrollIntoView({behavior:'smooth',block:'start'});
-    announce(`完了：${chosen.length}枚を無加工で格納しました。互換性は未検証のため、本番CSV生成はまだ停止状態です。`);
-  } catch(err) {announce(err.message||String(err),true);console.error(err);}
+    setZipProgress(100,'完了');announce(`${chosen.length}枚のZIPを作成しました。`);
+  } catch(err) {announce(err.message||String(err),true);console.error(err);hideZipProgress();}
   finally {setBusy(false);}
 }
 buildButton.addEventListener('click',build);
 $('#redownload').addEventListener('click',()=>{if(lastZip)saveZip(lastZip,lastName);});
 $('#copy-prompt').addEventListener('click',async()=>{
-  try {await navigator.clipboard.writeText($('#prompt-text').textContent);$('#copy-prompt').textContent='コピーしました';setTimeout(()=>$('#copy-prompt').textContent='コピー',1800);}
-  catch {announce('クリップボードが利用できません。表示された文章を選択してコピーしてください。',true);}
+  try {await navigator.clipboard.writeText($('#prompt-text').textContent);$('#copy-feedback').textContent='コピーしました';$('#copy-feedback').classList.add('shown');$('#copy-prompt').classList.add('copied');$('#copy-prompt').setAttribute('aria-label','コピーしました');setTimeout(()=>{$('#copy-feedback').textContent='';$('#copy-feedback').classList.remove('shown');$('#copy-prompt').classList.remove('copied');$('#copy-prompt').setAttribute('aria-label','依頼文をコピー');},1800);}
+  catch {announce('コピーできませんでした。表示された文章を選択してコピーしてください。',true);}
 });

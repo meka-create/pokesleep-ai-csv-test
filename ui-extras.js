@@ -3,6 +3,9 @@ const $=id=>document.getElementById(id);
 const tips=$('tipsDialog'), sources=$('sourcesDialog'),more=$('moreMenu'), moreBtn=$('moreBtn');
 function openDialog(d){if(!d)return;if(typeof d.showModal==='function'&&!d.open)d.showModal();else d.setAttribute('open','');}
 function closeDialog(d){if(!d)return;if(typeof d.close==='function'&&d.open)d.close();else d.removeAttribute('open');}
+// The sample is shared with the frozen reference app; show a clean fallback offline.
+const tipsExample=$('tips-example-img'),tipsUnavailable=$('tips-example-unavailable');
+tipsExample.addEventListener('error',()=>{tipsExample.hidden=true;tipsUnavailable.hidden=false;});
 $('tipsBtn').addEventListener('click',()=>openDialog(tips));
 $('tipsClose').addEventListener('click',()=>closeDialog(tips));
 tips.addEventListener('click',e=>{if(e.target===tips)closeDialog(tips);});
