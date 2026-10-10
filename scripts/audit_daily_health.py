@@ -228,7 +228,12 @@ def execute(site,*,now=None,runs=None,check_public_files=True,max_age_hours=34,
                 delay=public_delay,classifier=public_classifier,fetcher=public_fetcher)
         except (OSError,ValueError,KeyError,TypeError) as e:
             require(False,'PUBLIC_AUDIT_EXCEPTION:'+type(e).__name__,problems)
-    report['state']='PASS' if not problems else ('DELAYED' if set(problems)<=DELAY_CODES else 'ATTENTION')
+    # A completed-successful run with an old status is a publication failure,
+    # NOT a harmless scheduling delay. Only missing/running cycles are DELAYED.
+    waiting=('SCHEDULED_JST_DAY_RUN_MISSING' in problems or
+             'SCHEDULED_JST_DAY_RUN_IN_PROGRESS' in problems)
+    report['state']='PASS' if not problems else (
+        'DELAYED' if waiting and set(problems)<=DELAY_CODES else 'ATTENTION')
     return report
 
 def main():
