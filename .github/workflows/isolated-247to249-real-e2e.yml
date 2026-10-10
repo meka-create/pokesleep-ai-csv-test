@@ -1,0 +1,141 @@
+name: ISOLATED real 247-to-249 promotion evidence (HOLD)
+on:
+  push:
+    branches:
+      - validation/auto-promote-247to249-20261010
+permissions:
+  contents: read
+jobs:
+  isolated-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install real Chromium
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Pin upstream and independently refetch for trusted gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = validation/auto-promote-247to249-20261010
+          git clone --depth 1 https://github.com/nitoyon/pokesleep-tool.git "$RUNNER_TEMP/upstream"
+          test "$(git -C "$RUNNER_TEMP/upstream" rev-parse HEAD)" = 06569f6aeb1d3b9207208b45b27616e5a1f66d95
+          git clone --filter=blob:none --no-checkout https://github.com/nitoyon/pokesleep-tool.git "$RUNNER_TEMP/independent"
+          git -C "$RUNNER_TEMP/independent" fetch --depth 1 origin 06569f6aeb1d3b9207208b45b27616e5a1f66d95
+          git -C "$RUNNER_TEMP/independent" checkout --detach 06569f6aeb1d3b9207208b45b27616e5a1f66d95
+      - name: Build isolated historical 247-species baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p isolated/site/kit-assets isolated/staging
+          cp index.html app.js isolated/site/
+          cp kit-assets/* isolated/site/kit-assets/
+          python - <<'PY'
+          import json,hashlib,pathlib,re
+          root=pathlib.Path('isolated/site/kit-assets');mfile=root/'MASTER_DATA.json';vfile=root/'KIT_VERSION.json'
+          m=json.loads(mfile.read_text());v=json.loads(vfile.read_text())
+          assert len(m['pokemon'])==249
+          assert {'Foongus','Amoonguss'} <= {p['name_en'] for p in m['pokemon']}
+          assert v['productionCsvAllowed'] is False and v['compatibilityVerified'] is False
+          m['pokemon']=[p for p in m['pokemon'] if p['name_en'] not in {'Foongus','Amoonguss'}]
+          assert len(m['pokemon'])==247
+          m['cutoff']=max(p['arrival'] for p in m['pokemon'])
+          m['provenance']['verification']='ISOLATED_HISTORICAL_247_TEST_ONLY'
+          raw=lambda x:(json.dumps(x,ensure_ascii=False,sort_keys=True,indent=2)+'\n').encode()
+          canonical=lambda x:hashlib.sha256(json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          mfile.write_bytes(raw(m))
+          v['rawAssetSha256']['MASTER_DATA.json']=hashlib.sha256(mfile.read_bytes()).hexdigest()
+          v['assetSha256']['MASTER_DATA.json']=canonical(m)
+          v['sourceCommit']=None
+          vfile.write_bytes(raw(v))
+          app=pathlib.Path('isolated/site/app.js');code=app.read_text()
+          code,n=re.subn(r"(?m)^const KIT_VERSION_RAW_SHA256 = '[0-9a-f]{64}';$",lambda x:"const KIT_VERSION_RAW_SHA256 = '"+hashlib.sha256(vfile.read_bytes()).hexdigest()+"';",code)
+          assert n==1
+          app.write_text(code)
+          pathlib.Path('isolated/BASELINE_247.json').write_text(json.dumps({'species':247,'removed':['Amoonguss','Foongus'],'productionCsvAllowed':False},indent=2))
+          PY
+      - name: Real upstream npm tests, build and 247-to-249 diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/daily_watch.py --upstream "$RUNNER_TEMP/upstream" --kit-dir isolated/site/kit-assets --out isolated/staging
+          python - <<'PY'
+          import json
+          d=json.load(open('isolated/staging/UPSTREAM_DIFF.json'))
+          assert d['previousPokemonCount']==247 and d['sourcePokemonCount']==249
+          assert d['addedSpecies']==['Amoonguss','Foongus'],d
+          assert not d['removedSpecies'] and not d['changedSpecies'] and not d['newSubskillKeys'],d
+          p=json.load(open('isolated/staging/preflight/UPSTREAM_PREFLIGHT.json'))
+          assert p['status']=='UPSTREAM_TESTS_PASS_IMPORT_E2E_REQUIRED',p
+          print('REAL_SOURCE_247_TO_249_DIFF_PASS')
+          PY
+      - name: Build strict candidate-bound CSV for new species
+        run: |
+          python scripts/build_auto_vectors.py --master isolated/staging/MASTER_DATA.candidate.json --diff isolated/staging/UPSTREAM_DIFF.json --csv isolated/staging/AUTO_VECTORS.csv --coverage isolated/staging/VECTOR_COVERAGE.json
+      - name: REAL pinned and public UI CSV importer and exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/run_pinned_import_e2e.py --upstream "$RUNNER_TEMP/upstream" --candidate isolated/staging/MASTER_DATA.candidate.json --diff isolated/staging/UPSTREAM_DIFF.json --schema isolated/site/kit-assets/CSV_SCHEMA.json --validator isolated/site/kit-assets/VALIDATOR.py --preflight isolated/staging/preflight/UPSTREAM_PREFLIGHT.json --vector isolated/staging/AUTO_VECTORS.csv --coverage isolated/staging/VECTOR_COVERAGE.json --out isolated/staging/e2e --run-id "$GITHUB_RUN_ID" --base-sha "$GITHUB_SHA"
+      - name: Package genuine same-run proof and independently verify release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p isolated/bundle/upstream_source/src/data isolated/bundle/upstream_source/src/i18n/ja isolated/bundle/upstream_source/src/util
+          cp isolated/staging/{MASTER_DATA.candidate.json,UPSTREAM_DIFF.json,AUTO_VECTORS.csv,VECTOR_COVERAGE.json} isolated/bundle/
+          cp isolated/staging/preflight/UPSTREAM_PREFLIGHT.json isolated/bundle/
+          cp isolated/staging/e2e/PROMOTION_PROOF.json isolated/bundle/
+          cp isolated/staging/e2e/browser/PROBE_RESULT.json isolated/bundle/
+          cp isolated/staging/e2e/browser/roundtrip_export.csv isolated/bundle/
+          cp isolated/staging/e2e/live/PROBE_RESULT.json isolated/bundle/LIVE_PROBE_RESULT.json
+          cp isolated/staging/e2e/live/roundtrip_export.csv isolated/bundle/live_roundtrip_export.csv
+          cp "$RUNNER_TEMP/upstream/src/data/pokemon.json" isolated/bundle/upstream_source/src/data/
+          cp "$RUNNER_TEMP/upstream/src/i18n/ja/"{pokemons,data,skills}.json isolated/bundle/upstream_source/src/i18n/ja/
+          cp "$RUNNER_TEMP/upstream/src/util/SubSkill.ts" isolated/bundle/upstream_source/src/util/
+          python scripts/verified_auto_promotion.py --bundle isolated/bundle --site isolated/site --out isolated/patch --run-id "$GITHUB_RUN_ID" --base-sha "$GITHUB_SHA" --upstream-code-dir "$RUNNER_TEMP/independent"
+      - name: Real trusted publisher writes TEMP site only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/publish_auto_result.py --site isolated/site --bundle isolated/bundle --upstream "$RUNNER_TEMP/independent" --audit-status isolated/staging/update-status.json --audit-result success --run-id "$GITHUB_RUN_ID" --base-sha "$GITHUB_SHA"
+          python - <<'PY'
+          import json,pathlib
+          site=pathlib.Path('isolated/site');m=json.loads((site/'kit-assets/MASTER_DATA.json').read_text());v=json.loads((site/'kit-assets/KIT_VERSION.json').read_text())
+          assert len(m['pokemon'])==249
+          assert {'Foongus','Amoonguss'} <= {p['name_en'] for p in m['pokemon']}
+          assert v['productionCsvAllowed'] is False and v['compatibilityVerified'] is False
+          assert v['sourceCommit']=='06569f6aeb1d3b9207208b45b27616e5a1f66d95'
+          s=json.loads((site/'update-status.json').read_text())
+          assert s['state']=='healthy' and s['reasonCode']=='AUTO_PROMOTION_COMMITTED_PENDING_PUSH'
+          pathlib.Path('isolated/ISOLATED_PASS.json').write_text(json.dumps({'status':'REAL_DUAL_E2E_AND_TEMP_PROMOTION_PASS','speciesBefore':247,'speciesAfter':249,'added':['Amoonguss','Foongus'],'remotePushPerformed':False,'productionCsvAllowed':False},indent=2)+'\n')
+          print('REAL_DUAL_E2E_AND_LOCAL_PROMOTION_PASS; NO_REMOTE_PUSH')
+          PY
+      - name: Upload results on both PASS and HOLD
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ISOLATED-247-249-REAL-E2E-HOLD
+          path: |
+            isolated/BASELINE_247.json
+            isolated/ISOLATED_PASS.json
+            isolated/staging/update-status.json
+            isolated/staging/UPSTREAM_DIFF.json
+            isolated/staging/VECTOR_COVERAGE.json
+            isolated/staging/AUTO_VECTORS.csv
+            isolated/staging/e2e/
+            isolated/staging/preflight/UPSTREAM_PREFLIGHT.json
+            isolated/patch/AUTO_PROMOTION_PLAN.json
+          retention-days: 7
+          if-no-files-found: warn
