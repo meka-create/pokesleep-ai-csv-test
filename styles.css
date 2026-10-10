@@ -98,3 +98,13 @@ main{padding-top:34px}
 /* v7: restore frozen old-scan more-menu icon geometry using SVG dots instead of font glyph */
 .masthead-actions .more-btn{font-size:0;line-height:0}
 .masthead-actions .more-btn svg{display:block;stroke:none;fill:currentColor;width:22px;height:22px}
+
+/* v9: brand subtitle, matching the frozen scan tool's two-line title treatment. */
+.brandtext{display:flex;flex-direction:column;gap:2px;min-width:0}
+.brandname{display:block;line-height:1.2}
+.brandsub{display:block;font-size:11px;font-weight:750;letter-spacing:.045em;line-height:1.25;color:#8b93a4;white-space:nowrap}
+
+/* v10: make the main brand title larger/bolder like 個体値ぶっこみスキャン */
+.brandname{font-size:22px;font-weight:900;letter-spacing:-.055em}
+.brandsub{font-size:11px;font-weight:750;letter-spacing:.045em}
+@media(max-width:620px){.brandname{font-size:17px}.brandsub{font-size:10px}}
