@@ -164,9 +164,9 @@ class PostpublishAuditTests(unittest.TestCase):
 
     def test_before_daily_due_hour_uses_previous_day(self):
         self.assertEqual('2026-10-09',audit.scheduled_jst_day(
-            datetime(2026,10,09,18,59,tzinfo=timezone.utc)).isoformat())
+            datetime(2026,10,9,18,59,tzinfo=timezone.utc)).isoformat())
         self.assertEqual('2026-10-10',audit.scheduled_jst_day(
-            datetime(2026,10,09,19,0,tzinfo=timezone.utc)).isoformat())
+            datetime(2026,10,9,19,0,tzinfo=timezone.utc)).isoformat())
 
     def test_unrelated_corruption_is_not_classified_as_delay(self):
         status=audit.load(self.root/'update-status.json')
