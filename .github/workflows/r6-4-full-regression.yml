@@ -1,0 +1,65 @@
+name: r6.4 full independent regression (validation branch only, HOLD)
+on:
+  push:
+    branches: [validation/r6-4-jst-day-gate-20261010]
+    paths:
+      - .github/workflows/r6-4-full-regression.yml
+permissions:
+  contents: read
+jobs:
+  all-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 40
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install genuine Chromium for synthetic browser regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          BROWSER="$(python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              print(p.chromium.executable_path)
+          PY
+          )"
+          test -x "$BROWSER"
+          sudo ln -sf "$BROWSER" /usr/bin/chromium
+      - name: All Python tests, rollback tests, upstream tests and browser fixture tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q scripts tests audit kit-assets probe
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          python -m unittest discover -s audit -p 'test_*.py' -v
+          node --check app.js
+          node --check update-status.js
+          node --check zip-store.js
+      - name: Production guard and 249-species asset hash invariant
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('kit-assets')
+          m=json.loads((root/'MASTER_DATA.json').read_bytes())
+          v=json.loads((root/'KIT_VERSION.json').read_bytes())
+          assert len(m['pokemon'])==249
+          assert v['productionCsvAllowed'] is False and v['compatibilityVerified'] is False
+          for name,expected in v['rawAssetSha256'].items():
+              actual=hashlib.sha256((root/name).read_bytes()).hexdigest()
+              assert actual==expected,name
+          print('FULL_REGRESSION_AND_249_SPECIES_HOLD_PASS')
+          PY
