@@ -1,13 +1,13 @@
 {
   "schemaVersion": "pokesleep-upstream-status-v1",
-  "state": "pending",
-  "checkedAt": null,
-  "upstreamCommit": null,
+  "state": "attention",
+  "checkedAt": "2026-10-10T17:06:16.462597Z",
+  "upstreamCommit": "f394104a0a9d44335a8697143464e5add9815643",
   "activeSourceCommit": null,
-  "reasonCode": "FIRST_CHECK_PENDING",
-  "message": "午前4時の上流データ監視は、公開版への反映後に開始されます。",
-  "details": "検証済みの更新だけを公開する方針です。初回実行が終わるまでは自動更新の稼働状況を確認できません。",
+  "reasonCode": "UPDATE_REQUIRES_VALIDATION",
+  "message": "上流データの確認が必要です。",
+  "details": "上流データに差分があります。自動更新せず確認待ちです。",
   "runUrl": null,
   "productionCsvAllowed": false,
-  "createdAt": "2026-10-10T00:48:00Z"
+  "monitorMode": "READ_ONLY_NO_IMPORTER_NO_AUTOPROMOTION"
 }
