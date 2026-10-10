@@ -23,7 +23,7 @@ const allowed = /\.(png|jpg|jpeg|webp)$/i;
 const MAX_ARCHIVE_BYTES = 300 * 1024 * 1024; // technical browser-memory guard, NOT empirically verified AI capacity
 function fmt(bytes) { return (bytes / 1024 / 1024).toFixed(1) + ' MB'; }
 function announce(msg, error=false) { status.textContent=msg; status.classList.toggle('error',error); }
-function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.innerHTML=b?'ZIPを作成しています…':'<span>ZIPを作成する</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg>'; }
+function setBusy(b) { busy=b; buildButton.disabled = b || hashing > 0 || hashError || !FILES.size; fileInput.disabled=b; buildButton.innerHTML=b?'ZIPを作成しています…':'<span>AI提出用ZIPを作成</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg>'; }
 function setZipProgress(p,label){const bar=$('#zip-progress'),fill=$('#zip-progress-fill');if(!bar||!fill)return;bar.hidden=false;fill.style.width=Math.round(Math.max(0,Math.min(100,p)))+'%';$('#zip-progress-label').textContent=label;}
 function hideZipProgress(){const bar=$('#zip-progress');if(bar)bar.hidden=true;}
 function escapeHtml(x) { return x.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

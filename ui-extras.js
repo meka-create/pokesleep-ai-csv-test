@@ -1,6 +1,17 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const tips=$('tipsDialog'), sources=$('sourcesDialog'),more=$('moreMenu'), moreBtn=$('moreBtn');
+// On Android Chrome, prefer the official ChatGPT app using a BROWSABLE
+// HTTPS VIEW intent restricted to OpenAI's Android package. Chrome performs
+// the fallback to the existing web URL when the app cannot handle the intent.
+// Leave ordinary HTTPS links unchanged everywhere else (including iOS/PC).
+const ua=navigator.userAgent||'';
+const androidChrome=/Android/i.test(ua)&&/Chrome\//i.test(ua)&&
+  !/(SamsungBrowser|EdgA|OPR|UCBrowser|Firefox|FxiOS)/i.test(ua);
+const chatGPTLink=document.querySelector('a.ai-choice[href="https://chatgpt.com/"]');
+if(androidChrome&&chatGPTLink){
+  chatGPTLink.href='intent://chatgpt.com/#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.openai.chatgpt;S.browser_fallback_url=https%3A%2F%2Fchatgpt.com%2F;end';
+}
 function openDialog(d){if(!d)return;if(typeof d.showModal==='function'&&!d.open)d.showModal();else d.setAttribute('open','');}
 function closeDialog(d){if(!d)return;if(typeof d.close==='function'&&d.open)d.close();else d.removeAttribute('open');}
 // The sample is shipped in this site; show a clean fallback if the local asset is unreadable.
