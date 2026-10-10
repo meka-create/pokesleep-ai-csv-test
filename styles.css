@@ -110,3 +110,31 @@ main{padding-top:34px}
 @media(max-width:620px){.brandname{font-size:17px}.brandsub{font-size:10px}}
 /* v11: Match the frozen 個体値ぶっこみスキャン title font and tracking. Keep v10 size/weight. */
 .brandname{font-family:Inter,"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,-apple-system,sans-serif;letter-spacing:-.035em}
+
+/* v13: Step 3 badge and text use two stable tracks, visually centered on every width. */
+.handoff .final-step{
+  display:grid;
+  grid-template-columns:26px minmax(0,1fr);
+  column-gap:10px;
+  align-items:center;
+  justify-items:stretch;
+  flex-wrap:initial;
+}
+.handoff .final-step > .handoff-index{
+  display:grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  min-width:26px;
+  line-height:1;
+  align-self:center;
+  justify-self:center;
+  margin:0;
+}
+.handoff .final-step > strong{
+  display:block;
+  min-width:0;
+  align-self:center;
+  margin:0;
+  line-height:1.5;
+}
