@@ -239,6 +239,6 @@ async function build() {
 buildButton.addEventListener('click',build);
 $('#redownload').addEventListener('click',()=>{if(lastZip)saveZip(lastZip,lastName);});
 $('#copy-prompt').addEventListener('click',async()=>{
-  try {await navigator.clipboard.writeText($('#prompt-text').textContent);$('#copy-feedback').textContent='コピーしました';$('#copy-prompt').setAttribute('aria-label','コピーしました');setTimeout(()=>{$('#copy-feedback').textContent='クリックでコピーできます';$('#copy-prompt').setAttribute('aria-label','依頼文をコピー');},1800);}
+  try {await navigator.clipboard.writeText($('#prompt-text').textContent);$('#copy-feedback').textContent='コピーしました';$('#copy-feedback').classList.add('shown');$('#copy-prompt').classList.add('copied');$('#copy-prompt').setAttribute('aria-label','コピーしました');setTimeout(()=>{$('#copy-feedback').textContent='';$('#copy-feedback').classList.remove('shown');$('#copy-prompt').classList.remove('copied');$('#copy-prompt').setAttribute('aria-label','依頼文をコピー');},1800);}
   catch {announce('コピーできませんでした。表示された文章を選択してコピーしてください。',true);}
 });

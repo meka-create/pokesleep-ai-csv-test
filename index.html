@@ -5,7 +5,7 @@
 <title>AIぶっこみスキャン</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="theme-color" content="#10232c">
+<meta name="theme-color" content="#192c4a">
 <meta name="description" content="ポケモンスリープのスクリーンショットをAI提出用ZIPにまとめるツール。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://meka-create.github.io/pokesleep-ai-scan/">
@@ -28,10 +28,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="AIぶっこみスキャン">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="stylesheet" href="./styles.css?v=step2-preview-20261010">
-<script type="module" src="./app.js?v=step2-preview-20261010"></script>
+<link rel="stylesheet" href="./styles.css?v=step2-cobalt-20261010-v3">
+<script type="module" src="./app.js?v=step2-cobalt-20261010-v3"></script>
 <script type="module" src="./update-status.js?v=20261010-watch-ui-minimal-1"></script>
-<script defer src="./ui-extras.js?v=step2-preview-20261010"></script>
+<script defer src="./ui-extras.js?v=step2-cobalt-20261010-v3"></script>
 </head>
 <body>
 <div class="page">
@@ -67,16 +67,21 @@
     <section class="panel build-panel" aria-labelledby="build-title">
       <div class="section-heading"><span class="stepnum">02</span><h2 id="build-title">AI提出用ZIPを作成</h2></div>
       <button id="build" class="primary" type="button" disabled><span>ZIPを作成する</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg></button>
-      <div id="zip-progress" class="zip-progress" hidden><div class="zip-progress-track"><div id="zip-progress-fill"></div></div><span id="zip-progress-label">準備中…</span></div><div id="zip-progress" class="zip-progress" role="status" aria-live="polite" hidden><div class="zip-progress-caption"><span id="zip-progress-label">準備中…</span></div><div class="zip-track"><div id="zip-progress-fill" class="zip-progress-fill"></div></div></div><p class="message" id="message" role="status" aria-live="polite"></p>
+      <div id="zip-progress" class="zip-progress" hidden><div class="zip-progress-track"><div id="zip-progress-fill"></div></div><span id="zip-progress-label">準備中…</span></div><p class="message" id="message" role="status" aria-live="polite"></p>
     </section>
     <section class="panel ready" id="ready" aria-labelledby="ready-title" hidden>
       <div class="section-heading"><span class="stepnum done">✓</span><h2 id="ready-title">ZIPの準備ができました</h2></div>
       <div class="download-row"><span class="doc-icon">ZIP</span><div><strong id="archive-name">AI_Bukkomi_Scan.zip</strong><small id="archive-count"></small></div><button type="button" id="redownload" class="secondary">保存</button></div>
-      <div class="ai-choices"><h3>生成AIへ送る</h3><a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><strong>ChatGPTを開く</strong><span class="arrow">↗</span></a></div>
-      <div class="prompt"><div class="prompt-head"><span class="prompt-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l4 4v14H4V3h4Zm7 0v5h5M7 12h10M7 16h8"/></svg>AIに送る依頼文</span><button id="copy-prompt" type="button" aria-label="依頼文をコピー" title="依頼文をコピー" class="copy-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><p class="prompt-text" id="prompt-text">添付ZIP内の START_HERE.md を最初に読み、そこで指定される必読ファイル・手順・確認条件・出力条件を厳密に守ってください。INPUT_MANIFEST.json の全画像を実際に解析し、未確定事項や実行不能な工程は推測せず報告してください。</p><div class="prompt-foot"><span id="copy-feedback" role="status" aria-live="polite">タップして文章をコピーできます</span><span aria-hidden="true">↗</span></div></div>
+      <section class="handoff" aria-label="生成AIに送る手順">
+        <h3 class="handoff-title">続けて生成AIで解析</h3>
+        <div class="handoff-step"><span class="handoff-index">1</span><strong>依頼文をコピー</strong><span class="handoff-hint">右上のアイコンからコピー</span></div>
+        <div class="prompt"><div class="prompt-head"><span class="prompt-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l4 4v14H4V3h4Zm7 0v5h5M7 12h10M7 16h8"/></svg>AIに送る依頼文</span><button id="copy-prompt" type="button" aria-label="依頼文をコピー" title="依頼文をコピー" class="copy-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><p class="prompt-text" id="prompt-text">添付ZIP内の START_HERE.md を最初に読み、そこで指定される必読ファイル・手順・確認条件・出力条件を厳密に守ってください。INPUT_MANIFEST.json の全画像を実際に解析し、未確定事項や実行不能な工程は推測せず報告してください。</p><span class="copy-feedback" id="copy-feedback" role="status" aria-live="polite"></span></div>
+        <div class="handoff-step"><span class="handoff-index">2</span><strong>生成AIを開く</strong></div>
+        <a class="ai-choice" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer"><span class="ai-logo">✣</span><strong>ChatGPTを開く</strong><span class="arrow">↗</span></a>
+        <div class="handoff-step final-step"><span class="handoff-index">3</span><strong>保存したZIPを添付し、依頼文を貼り付けて送信</strong></div>
+      </section>
     </section>
   </main>
-  <footer><span>AIぶっこみスキャン</span><span>© 2026</span></footer>
 </div>
 <dialog id="update-watch-dialog" aria-labelledby="update-watch-title" aria-describedby="update-watch-state"><div class="watch-modal-header"><h2 id="update-watch-title">データ更新のお知らせ</h2><button id="update-watch-close" type="button" aria-label="閉じる">×</button></div><p id="update-watch-state" class="watch-lead">更新状況を確認しています。</p><p class="watch-public-note">現在のデータは引き続き利用できます。</p><div class="watch-actions"><button id="update-watch-close-bottom" type="button">閉じる</button></div></dialog>
 <dialog id="tipsDialog" class="modal" aria-labelledby="tipsDialogTitle"><div class="modal-head"><h2 id="tipsDialogTitle">TIPS</h2><button id="tipsClose" class="close-icon" type="button" aria-label="閉じる">×</button></div><div class="modal-body"><p class="tips-lead">食材から性格までが入るスクショを選んでください。<br>性格は必ず入れてください。食材は少し欠けていても解析できます。</p><figure class="tips-example"><img src="https://meka-create.github.io/pokesleep-scan/assets/example-screenshot.png" alt="スクリーンショットの例" loading="lazy"><figcaption>複数枚まとめて選択できます</figcaption></figure></div></dialog>
