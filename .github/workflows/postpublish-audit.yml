@@ -2,6 +2,7 @@ name: PokeSleep independent daily post-publish audit (HOLD)
 on:
   schedule:
     # Primary updater: 04:00 JST. Independent observer: 06:15 JST.
+    # r6.4 requires the SAME scheduled JST day; delayed jobs are not PASS.
     # 21:15 UTC = 06:15 JST next day. GitHub cron may be delayed.
     - cron: '15 21 * * *'
   workflow_dispatch:
@@ -9,6 +10,7 @@ on:
     branches:
       - main
       - validation/r6-3-postpublish-watch-20261010
+      - validation/r6-4-jst-day-gate-20261010
     paths:
       - .github/workflows/postpublish-audit.yml
       - scripts/audit_daily_health.py
@@ -39,7 +41,7 @@ jobs:
           python -m py_compile scripts/audit_daily_health.py scripts/verify_pages_live.py
           python -m unittest discover -s tests -p 'test_daily_health.py' -v
           python -m unittest discover -s tests -p 'test_release_health.py' -v
-      - name: Independently verify latest daily workflow, all kit SHA pins and actual public Pages bytes
+      - name: Independently verify required JST daily cycle, all kit SHA pins and actual public Pages bytes
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash

@@ -22,7 +22,8 @@ class PostpublishAuditTests(unittest.TestCase):
                  runUrl='https://github.com/meka-create/pokesleep-ai-csv-test/actions/runs/38025210341')
         (self.root/'update-status.json').write_text(json.dumps(s)+'\n')
         self.runs={'workflow_runs':[{'id':38025210341,'status':'completed','conclusion':'success',
-           'event':'workflow_dispatch','head_branch':'main','path':'.github/workflows/upstream-watch.yml'}]}
+           'event':'workflow_dispatch','head_branch':'main','path':'.github/workflows/upstream-watch.yml',
+           'created_at':'2026-10-10T04:46:08Z'}]}
         self.git('init','-q')
         self.git('config','user.name','Fixture')
         self.git('config','user.email','unit@example.invalid')
@@ -89,5 +90,108 @@ class PostpublishAuditTests(unittest.TestCase):
                  public_fetcher=lambda *args:(self.root/'update-status.json').read_bytes())
         self.assertEqual('PASS',result['state'],result['problems'])
         self.assertEqual(2,len(result['publicObservations']))
+
+    def test_previous_jst_day_inside_34h_is_not_pass(self):
+        # 10 Oct 15:00 JST audit, 9 Oct 13:46 JST run and healthy status.
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T04:46:48Z'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T04:46:08Z'
+        result=self.run_audit()
+        self.assertEqual('DELAYED',result['state'],result)
+        self.assertIn('SCHEDULED_JST_DAY_STATUS_MISSING',result['problems'])
+        self.assertIn('SCHEDULED_JST_DAY_RUN_MISSING',result['problems'])
+        self.assertNotIn('UPSTREAM_WATCH_STALE_OR_FUTURE',result['problems'])
+
+    def test_utc_previous_date_but_jst_today_is_accepted(self):
+        self.now=datetime(2026,10,11,0,0,tzinfo=timezone.utc)  # 09:00 JST
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-10T19:10:00Z'  # 04:10 JST on 11 Oct
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0]['created_at']='2026-10-10T19:00:08Z'
+        self.assertEqual('PASS',self.run_audit()['state'])
+
+    def test_last_day_of_month_and_year(self):
+        self.assertEqual('2025-12-31',audit.scheduled_jst_day(
+            datetime(2025,12,31,18,30,tzinfo=timezone.utc)).isoformat()) # 03:30 on Jan 1
+        self.assertEqual('2026-01-01',audit.scheduled_jst_day(
+            datetime(2025,12,31,19,0,tzinfo=timezone.utc)).isoformat()) # 04:00 on Jan 1
+
+    def test_late_running_cycle_not_a_success_or_failure(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T04:46:48Z'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0].update(status='in_progress',conclusion=None)
+        result=self.run_audit()
+        self.assertEqual('DELAYED',result['state'],result)
+        self.assertIn('SCHEDULED_JST_DAY_RUN_IN_PROGRESS',result['problems'])
+
+    def test_actual_failed_today_distinct_from_delay(self):
+        self.runs['workflow_runs'][0].update(status='completed',conclusion='failure')
+        result=self.run_audit()
+        self.assertEqual('ATTENTION',result['state'],result)
+        self.assertIn('GITHUB_WATCH_LATEST_NOT_SUCCESS',result['problems'])
+
+    def test_latest_today_success_but_yesterday_status_is_failure(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T18:30:00Z'  # 03:30 JST today
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        result=self.run_audit()
+        self.assertEqual('ATTENTION',result['state'],result)
+        self.assertIn('SCHEDULED_JST_DAY_STATUS_MISSING',result['problems'])
+
+    def test_offset_time_and_naive_timestamp(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-10T13:46:48+09:00'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.assertEqual('PASS',self.run_audit()['state'])
+        status['checkedAt']='2026-10-10T04:46:48'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.assertIn('UPSTREAM_WATCH_TIMESTAMP_INVALID',self.run_audit()['problems'])
+
+    def test_missing_created_at_fails_closed(self):
+        self.runs['workflow_runs'][0].pop('created_at')
+        self.assertIn('GITHUB_WATCH_CREATED_AT_INVALID',self.run_audit()['problems'])
+
+    def test_run_list_is_not_order_dependent(self):
+        self.runs['workflow_runs'].insert(0,{
+            'id':12,'status':'completed','conclusion':'success',
+            'event':'schedule','head_branch':'main',
+            'path':'.github/workflows/upstream-watch.yml',
+            'created_at':'2026-10-09T04:00:00Z'
+        })
+        self.assertEqual('PASS',self.run_audit()['state'])
+
+    def test_before_daily_due_hour_uses_previous_day(self):
+        self.assertEqual('2026-10-09',audit.scheduled_jst_day(
+            datetime(2026,10,9,18,59,tzinfo=timezone.utc)).isoformat())
+        self.assertEqual('2026-10-10',audit.scheduled_jst_day(
+            datetime(2026,10,9,19,0,tzinfo=timezone.utc)).isoformat())
+
+    def test_unrelated_corruption_is_not_classified_as_delay(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T04:46:48Z'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T04:46:08Z'
+        version=self.root/'kit-assets/KIT_VERSION.json'
+        v=audit.load(version);v['productionCsvAllowed']=True
+        version.write_text(json.dumps(v))
+        result=self.run_audit()
+        self.assertEqual('ATTENTION',result['state'],result)
+        self.assertIn('CSV_HOLD_BROKEN',result['problems'])
+
+    def test_run_started_before_4am_jst_does_not_count(self):
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T18:59:59Z'
+        r=self.run_audit()
+        self.assertEqual('DELAYED',r['state'],r)
+        self.assertIn('SCHEDULED_JST_DAY_RUN_MISSING',r['problems'])
+
+    def test_checked_at_4am_jst_exactly_counts(self):
+        status=audit.load(self.root/'update-status.json')
+        status['checkedAt']='2026-10-09T19:00:00Z'
+        (self.root/'update-status.json').write_text(json.dumps(status))
+        self.runs['workflow_runs'][0]['created_at']='2026-10-09T19:00:00Z'
+        self.now=datetime(2026,10,9,20,tzinfo=timezone.utc)
+        self.assertEqual('PASS',self.run_audit()['state'])
 
 if __name__=='__main__':unittest.main()
