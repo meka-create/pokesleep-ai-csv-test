@@ -1,5 +1,5 @@
 /* Shell caching only. Security-critical kit assets always pass through native network fetch. */
-const CACHE='ai-bukkomi-scan-shell-step2-reference-blue-20261011-v17-chatgpt-app-link';
+const CACHE='ai-bukkomi-scan-shell-step2-reference-blue-20261011-v18-no-new-tab';
 const SHELL=['./','./index.html','./manifest.webmanifest','./styles.css','./app.js','./zip-store.js','./ui-extras.js','./icons/icon-192.png','./icons/icon-maskable-192.png','./icons/icon-512.png','./icons/icon-512-maskable.png','./icons/favicon-32.png','./icons/apple-touch-icon.png','./assets/ogp-card.png','./assets/example-screenshot.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('ai-bukkomi-scan-shell-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()]));});
