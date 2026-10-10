@@ -70,7 +70,7 @@ def atomic_write(path,body:bytes):
         if temp is not None:temp.unlink(missing_ok=True)
 
 
-def run(package_dir,records_path,observations_path,output_dir,prototype_test):
+def run(package_dir,records_path,observations_path,output_dir,prototype_test, *, user_confirmations_path=None):
     package_dir=pathlib.Path(package_dir).resolve()
     output_dir=pathlib.Path(output_dir).resolve();output_dir.mkdir(parents=True,exist_ok=True)
     # Fail closed; never allow an old PASS or CSV to survive a failed new attempt.
@@ -83,7 +83,8 @@ def run(package_dir,records_path,observations_path,output_dir,prototype_test):
         raise ValueError('v0.12 PROTOTYPE / HOLD guard differs; refuse')
     records=load_json(pathlib.Path(records_path))
     manifest=load_json(package_dir/'INPUT_MANIFEST.json')
-    species=audit(package_dir,pathlib.Path(records_path),pathlib.Path(observations_path) if observations_path else None)
+    species=audit(package_dir,pathlib.Path(records_path),pathlib.Path(observations_path) if observations_path else None,
+                  user_confirmations_path=pathlib.Path(user_confirmations_path) if user_confirmations_path else None)
     if species['hardConflicts']:
         raise ValueError('SPECIES_CONFLICT_HOLD: '+','.join(species['hardConflicts']))
     if species['total']!=manifest['inputImageCount']:
@@ -104,6 +105,8 @@ def run(package_dir,records_path,observations_path,output_dir,prototype_test):
       'mode':'DEVELOPMENT_ONLY_IntegratedGate_v0.8',
       'productionCsvAllowed':False,'compatibilityVerified':False,
       'speciesAuditHardConflicts':[], 'speciesIdentityReviewRecommendations':[],
+      'userFormConfirmationCount':species.get('userFormConfirmationCount',0),
+      'userFormConfirmations':[r['userFormConfirmation'] for r in species['records'] if r.get('userFormConfirmation')],
       'included':report['included'], 'excluded':report['excluded'],
       'csvSHA256':sha(data),'bindingSHA256':sha(json.dumps(binding,ensure_ascii=False,sort_keys=True).encode('utf-8')),
       'warning':'This CSV is a PROTOTYPE test artifact, NOT proven pokesleep-tool compatible.'
@@ -127,11 +130,13 @@ def main():
     p.add_argument('--package-dir',type=pathlib.Path,default=pathlib.Path('.'))
     p.add_argument('--records',type=pathlib.Path,required=True)
     p.add_argument('--observations',type=pathlib.Path)
+    p.add_argument('--user-confirmations',type=pathlib.Path)
     p.add_argument('--output-dir',type=pathlib.Path,required=True)
     p.add_argument('--prototype-test',action='store_true')
     a=p.parse_args()
     try:
-        result=run(a.package_dir,a.records,a.observations,a.output_dir,a.prototype_test)
+        result=run(a.package_dir,a.records,a.observations,a.output_dir,a.prototype_test,
+                   user_confirmations_path=a.user_confirmations)
         print(json.dumps(result,ensure_ascii=False,indent=2))
         return 0
     except (ValueError,ValidationError,OSError,KeyError,TypeError,json.JSONDecodeError) as e:

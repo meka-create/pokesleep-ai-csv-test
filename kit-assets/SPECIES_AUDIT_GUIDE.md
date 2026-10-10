@@ -1,5 +1,12 @@
 # v0.12 種族候補の独立監査 — SpeciesAudit v0.4（開発専用 / HOLD）
 
+## v0.13 4サイズの明示的な下限証明
+
+バケッチャ・パンプジンの4サイズ候補は食材・メインスキルのみでは区別できない。進化段階を絵で確認できた場合は `speciesFamilyVisualConfirmed:true` を明示したうえで、現行画像上の `最大所持数` が読み取れたときだけ、観察JSONへ `carry` と **`carryVisualConfirmed:true`** を記録する。監査は、対象サイズ以外の全サイズの**現行最小所持数より観察値が厳密に小さい**場合に限って `formSizeMinimumCarryCertificate` に証明を返す。これがある場合、ユーザーへのサイズ質問は不要（`speciesVisualConfirmed` は自動変更しない）。
+
+具体例：バケッチャ（こだましゅ）の所持数7は、他サイズの最小11/15/21より小さいため確定できる。補正/不明因子を考慮して証明できないときは、従来どおり番号付きの確認質問をする。SPやおてつだい時間の単一一致だけでは確定しない。明示的なフォーム表示からサイズを視認できた場合だけ `formSizeVisualConfirmed:true` を付けてよい。進化段階だけが分かる `speciesVisualConfirmed:true` ではサイズ確認を省略しない。既存のリボン・所持数ルールが変更された場合は、本証明の再監査が必要。
+
+
 ## 最優先
 - 従来の16列と `VALIDATOR.py` は変更しない。本番出力は `productionCsvAllowed=false` のまま。旧OCR Candidate系列へは書き戻さない。
 - 確定したv0.8b進捗方式：**約1分**経過し、自然な処理の区切りがある場合に限り、グラフィカルな進捗ゲージを優先して途中メッセージを試みる。**非中断**を最優先し、強制分割・ユーザーへの「続き」要求・再読込・待機・時刻ポーリングを禁止する。途中メッセージを送れない環境では解析を優先する。詳細は `PROGRESS_PROTOCOL.md`。
@@ -37,3 +44,86 @@ python3 SPECIES_AUDIT.py --package-dir . --records WORKING_RECORDS.json --observ
 ## v0.8の統合安全装置
 
 種族監査はこれまでどおり単独の読み取り専用処理です。ただし開発用CSVの納品は必ず `PROTOTYPE_EXPORT_GATE.py --prototype-test --records WORKING_RECORDS.json --package-dir . --output-dir ./dev-output` を経由します。必要に応じて `--observations SPECIES_OBSERVATIONS.json` を追加します。矛盾・種族の未解決確認があればHOLDします。出力にはCSVの行と画像IDを結び付ける `DEVELOPMENT_ONLY_ROW_BINDING.json` を添付します。`VALIDATOR.py` とマスター/16列スキーマを変更せず、数値からの種族自動確定もしません。
+
+## v0.13b 172枚実試験の重点二度読み・ユーザー確認監査（次候補）
+
+**画像は必ず実際に読む。固定回帰の正解表・過去CSV・画像ID・ファイル名から値を埋めない。**
+14件の独立採点で見つかった誤読タイプへの一般的な確認手順（特定画像への正答埋め込みではない）：
+
+1. **サブスキル**：`スキル確率アップM` と `スキルレベルアップM`、`食材確率アップM` は外見が似るが機能が違う。全画像の各サブスキルを**画像の文字列から**一度読み、CSV確定前に混同しやすい部分（「確率／レベル」「食材／スキル」）を独立に一度確認する。判読できなければ画素非改変の局所切り抜きで再確認し、推測で正解に置換しない。
+2. **種族・進化段階**：名前や食材の一致は種族の直接視認の代わりにならない。進化前後で類似する場合はアイコンの輪郭・頭部・尾・体形を元画像で確認し、`ジュプトル/ジュカイン` と `ラッキー/ハピナス` の確定には `speciesVisualConfirmed:true`（実際に視認した場合のみ）を必須とする。バケッチャ/パンプジンはさらに**進化段階と4サイズを別判定**。進化段階は`speciesFamilyVisualConfirmed:true`で明示確認する。
+3. **ニックネーム**：`ベ/ペ`・`ペ/ぺ`（カタカナとひらがな）・`ぁ/あ`、小さな文字、似た字体の違いは変換・正規化をせず画像の表記を優先する。疑わしい文字列は周辺文字と合わせて再視認し、判別できなければ質問する。
+4. **証拠と監査**：種族の実視認・最大所持数・サイズの実視認・ユーザーによる回答を混同しない。監査のPASSが画像読取の正しさを証明することはない。
+
+### ユーザーが回答した4サイズを監査へ渡す
+
+サイズを画像/下限だけで確定できず、ユーザーへ番号付き確認を求めたとき、実際の返信を受けてから**別ファイル**`USER_FORM_CONFIRMATIONS.json`に転記する。`SPECIES_OBSERVATIONS.json`の`formSizeVisualConfirmed`を真に**しない**。
+
+例（以下のID・ファイル名は説明専用。必ず手元のmanifestの実ID・元ファイル名を使用）：
+
+```json
+{
+  "purpose":"USER_DIRECT_FORM_CONFIRMATION_NOT_IMAGE_OBSERVATION",
+  "confirmations":[{
+    "imageId":"IMG-XXXX",
+    "originalFilename":"example-original.png",
+    "speciesFamily":"バケッチャ",
+    "confirmedSize":"ちゅうだましゅ",
+    "userAnswerText":"2",
+    "responseOrigin":"direct-user-reply"
+  }]
+}
+```
+
+「1/2/3/4」の番号は提示した共通順序「こだましゅ／ちゅうだましゅ／おおだましゅ／ギガだましゅ」に限る。元返信が異なる/不明ならHOLD。`speciesFamily`は画像の進化段階を独立視認しており `speciesFamilyVisualConfirmed:true` の場合だけ受付。user確認の結果 `data.species` も回答と一致させる。画像IDや元ファイル名、回答、サイズが一致しなければHOLD。ログの原文は元会話でも検証できるよう保持する。**JSONに書いてあるだけで本人の返信が本当に存在する保証にはならない**ため、最終監査時にも実チャットの返信を確認する。
+
+ゲートには `--user-confirmations USER_FORM_CONFIRMATIONS.json` を指定できる（任意）。指定なしは従来どおり。
+
+
+
+## v0.13d バケッチャ／パンプジン候補順位とゲーム内確認（最優先の追加手順）
+
+**スクリーンショットだけではユーザーにもサイズを判別できない場合がある。**
+そのため、画像を見せるだけでサイズ当てを求めない。現在のスクショから実際に読めたレベル・性格・解放済みサブスキル・おてつだい時間・最大所持数（不明はnull）を `SPECIES_OBSERVATIONS.json` に記録し、まず `SPECIES_AUDIT.py` の `fourSizeNumericAdvisory` を参照する。**バケッチャ4種だけでなくパンプジン4種も比較し、進化段階の誤認を検出する。**
+
+- `fourSizeNumericAdvisory.suggestedSpecies` が1件なら、回答を求める際 **「計算上の最有力候補（暫定）：◯◯」** と明示し、観測した数値と照合内容（例「所持数とおてつだい時間が同じ補正条件で整合」）を短く添える。`notCalibratedProbability:true` なので、根拠のない確率・「95%」等は禁止。いずれの候補も**確定ではない**。
+- 同点・数値不足・数値矛盾で `suggestedSpecies:null` のときは、「最有力を1件に絞れません」と書き、もっともらしい候補を捏造しない。
+- 進化段階を画像から独立確認でき、かつ別進化段階との強い数値競合がない場合は**その進化段階の4サイズを1～4で列挙**。進化段階が曖昧、または別進化段階のほうが数値上有力な場合は**両進化段階の8候補を1～8で列挙**。いずれも候補を消去せず、推奨候補には「★ 暫定最有力」を併記する。
+- 必ず **「SSだけではサイズを判断しにくいため、ポケモンスリープのゲーム画面で該当個体の種類・サイズを確認してください」** と記載し、画像ID・元ファイル名・ニックネームを併記する。ゲーム画面で確認した後、番号または候補の完全名称で返答してもらう。画像だけで判断することを強要しない。
+- `formSizeMinimumCarryCertificate` のような形式的証明やゲーム画面上の直接表示によってすでに確定した場合は、追加質問をしない。ただし進化段階は別証拠で確定している必要がある。
+- CSV出力・`reviewComplete` は推奨候補だけでは許可しない。回答を受けた場合のみ、下記の証拠スキーマに登録して照合し、`data.species` と整合した後でゲートを再実行。ユーザー回答原文は隠さず保存する。未回答ならHOLD。
+
+**質問文のテンプレート（数字は順位ではなく回答番号）**：
+
+「`IMG-XXXX`（元ファイル名）について、計算上の最有力候補（暫定）は **パンプジン（ギガだましゅ）** です。観測した所持数とおてつだい時間が同一の仮定で整合しています。ただし自動確定できません。候補：1.バケッチャ（こだましゅ）／2.バケッチャ（ちゅうだましゅ）／3.バケッチャ（おおだましゅ）／4.バケッチャ（ギガだましゅ）／5.パンプジン（こだましゅ）／6.パンプジン（ちゅうだましゅ）／7.パンプジン（おおだましゅ）／8.パンプジン（ギガだましゅ）★暫定最有力。**ゲーム画面で該当個体を開き、確認した番号または名称を返信してください。**」
+
+この例は**表示形式を示す合成例**で、特定の実画像の正解を提示するものではない。候補順位は毎回その画像の数値から計算する。視覚的に問題のない4候補質問の場合は1～4のみで提示し、別の進化段階を混同しない。
+
+### ユーザーがゲーム画面で種類＋サイズを確認した証拠
+
+`USER_FORM_CONFIRMATIONS.json` の1件に `verificationSource:"in-game-details"` を加えると、**ユーザーがゲーム画面で確認して回答した**という別経路を記録できる。`speciesFamilyVisualConfirmed`／`formSizeVisualConfirmed` を真に**しない**。8候補を列挙した質問では `questionScope:"eight-form"` を追加し、番号1～8または完全名称に限定する。
+
+```json
+{
+  "purpose":"USER_DIRECT_FORM_CONFIRMATION_NOT_IMAGE_OBSERVATION",
+  "confirmations":[{
+    "imageId":"IMG-XXXX", "originalFilename":"example-original.png",
+    "speciesFamily":"バケッチャ", "confirmedSize":"おおだましゅ",
+    "userAnswerText":"3", "responseOrigin":"direct-user-reply",
+    "verificationSource":"in-game-details", "questionScope":"eight-form"
+  }]
+}
+```
+
+4候補で進化段階をSS上で独立確認済みなら、従来どおり `verificationSource`・`questionScope` 省略、番号1～4を受付可能。ユーザーがゲーム画面で確認し**種類も含めて回答**した場合は、8候補の明示質問に対する `questionScope:"eight-form"`、または**完全種族名＋サイズ**の原文を必須とし、進化段階のSS視認がなくても `USER_DIRECT_IN_GAME_STAGE_AND_SIZE` として記録できる（画像視認フラグの偽装は禁止）。勝手にAIが推奨番号を回答と見なしてはいけない。
+
+ファイル名・画像ID・回答番号の候補集合・確定した `data.species` が1つでも食い違えばHOLD。ゲーム画面確認の実在はJSONだけでは保証できないため、実際のユーザー返信履歴と照合する。数値上の矛盾は監査情報として残し、回答を別の種族へ自動訂正しない。
+
+
+## Cross-stage 数値矛盾（STEP 1 / 誤確定防止）
+`strongCrossStageNumericConflictNeedsReview` が `true` の場合、進化段階を含む8候補のゲーム内確認が必要。`speciesIdentityReviewRecommended` が `true` の間は統合ゲートをHOLD。画像からのサイズ視認・下限所持数の証明のみでは解除できない。`questionScope:"eight-form"`, `verificationSource:"in-game-details"` の対象画像一致済み実回答なら解除可能。この計算は補助情報であり、種族の数値自動変更・候補削除ではない。
+
+## 独立監査の終了コードと確認回答の対応（中間監査修正）
+- 単独実行の `SPECIES_AUDIT.py` は、種族矛盾に加えて**画像から未確定の種族・サイズ確認が残る場合も終了コード3（HOLD）**を返す。監査JSONは出力されるが、完了または出力許可を意味しない。
+- ユーザーのサイズ回答は `include` の画像に限って受け付ける。除外画像に確認履歴を付けて件数だけ増やしたり、不正なdecisionを除外と扱ったりしない。
+- 統合ゲートの本番HOLDや、画像を実際に見て確定する責任は変更しない。
