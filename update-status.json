@@ -1,13 +1,12 @@
 {
-  "schemaVersion": "pokesleep-upstream-status-v1",
-  "state": "pending",
-  "checkedAt": null,
-  "upstreamCommit": null,
   "activeSourceCommit": null,
-  "reasonCode": "FIRST_CHECK_PENDING",
-  "message": "午前4時の上流データ監視は、公開版への反映後に開始されます。",
-  "details": "検証済みの更新だけを公開する方針です。初回実行が終わるまでは自動更新の稼働状況を確認できません。",
-  "runUrl": null,
+  "checkedAt": "2026-10-10T04:09:50Z",
+  "details": "新サブスキル 6件。上流のビルド・テストは通過しましたが、実CSV取り込み・書き戻しの自動証明が不足しています。公開マスターは更新していません。",
+  "message": "新しいデータを検出しました。互換性の確認が必要です",
   "productionCsvAllowed": false,
-  "createdAt": "2026-10-10T00:48:00Z"
+  "reasonCode": "IMPORTER_E2E_NOT_VERIFIED",
+  "runUrl": "https://github.com/meka-create/pokesleep-ai-csv-test/actions/runs/38023059707",
+  "schemaVersion": "pokesleep-upstream-status-v1",
+  "state": "attention",
+  "upstreamCommit": "06569f6aeb1d3b9207208b45b27616e5a1f66d95"
 }
